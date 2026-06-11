@@ -1,0 +1,8 @@
+# Dépendances de l'application de gestion de projet
+streamlit>=1.30.0
+plotly>=5.18.0
+pandas>=2.0.0
+# Export d'images/PDF des graphiques Plotly (optionnel mais recommandé).
+# La version 0.2.1 embarque Chromium et fonctionne sans navigateur externe ;
+# les versions >=1.0 nécessitent une installation séparée de Google Chrome.
+kaleido==0.2.1
