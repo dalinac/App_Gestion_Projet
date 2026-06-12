@@ -23,7 +23,7 @@ from modules import dashboard, todo, tasks, deliverables, meetings, export
 # Configuration de la page (doit être le premier appel Streamlit)
 st.set_page_config(
     page_title="Gestion de Projet",
-    page_icon="📊",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -41,11 +41,11 @@ def select_project():
     Affiche le sélecteur de projet dans la barre latérale et permet d'en créer
     ou d'en supprimer. Retourne l'id du projet sélectionné (ou None).
     """
-    st.sidebar.title("📊 Gestion de Projet")
+    st.sidebar.title("Gestion de Projet")
     projects = models.get_projects()
 
     # Création d'un nouveau projet
-    with st.sidebar.expander("➕ Nouveau projet"):
+    with st.sidebar.expander("Nouveau projet"):
         with st.form("new_project", clear_on_submit=True):
             name = st.text_input("Nom du projet *")
             description = st.text_area("Description")
@@ -82,8 +82,8 @@ def select_project():
     st.session_state["current_project"] = selected
 
     # Suppression du projet
-    with st.sidebar.expander("⚙️ Gérer ce projet"):
-        if st.button("🗑️ Supprimer le projet", type="secondary"):
+    with st.sidebar.expander("Gérer ce projet"):
+        if st.button("Supprimer le projet", type="secondary"):
             models.delete_project(selected)
             st.session_state.pop("current_project", None)
             st.rerun()
@@ -96,7 +96,7 @@ def main():
     project_id = select_project()
 
     if project_id is None:
-        st.title("Bienvenue 👋")
+        st.title("Bienvenue")
         st.write("Créez un projet depuis la barre latérale pour démarrer.")
         return
 
@@ -105,27 +105,27 @@ def main():
     page = st.sidebar.radio(
         "Navigation",
         [
-            "📊 Tableau de bord",
-            "⚡ Action Rapide",
-            "🗂️ Phases & Tâches",
-            "📦 Livrables",
-            "🤝 Réunions",
-            "💾 Export",
+            "Tableau de bord",
+            "Action Rapide",
+            "Phases & Tâches",
+            "Livrables",
+            "Réunions",
+            "Export",
         ],
     )
 
     # Routage vers le module correspondant
-    if page == "📊 Tableau de bord":
+    if page == "Tableau de bord":
         dashboard.render(project_id)
-    elif page == "⚡ Action Rapide":
+    elif page == "Action Rapide":
         todo.render(project_id)
-    elif page == "🗂️ Phases & Tâches":
+    elif page == "Phases & Tâches":
         tasks.render(project_id)
-    elif page == "📦 Livrables":
+    elif page == "Livrables":
         deliverables.render(project_id)
-    elif page == "🤝 Réunions":
+    elif page == "Réunions":
         meetings.render(project_id)
-    elif page == "💾 Export":
+    elif page == "Export":
         export.render(project_id)
 
     st.sidebar.divider()

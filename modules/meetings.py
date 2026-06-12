@@ -17,9 +17,9 @@ from utils.helpers import global_progress, parse_date, format_date_fr
 
 
 def render(project_id):
-    st.header("🤝 Réunions & Communication")
+    st.header("Réunions & Communication")
 
-    tab_meet, tab_recap = st.tabs(["📅 Réunions & CR", "📝 Récapitulatif automatique"])
+    tab_meet, tab_recap = st.tabs(["Réunions & CR", "Récapitulatif automatique"])
     with tab_meet:
         _render_meetings(project_id)
     with tab_recap:
@@ -36,7 +36,7 @@ def _render_meetings(project_id):
     phase_map.update({p["name"]: p["id"] for p in phases})
 
     # --- Planifier une réunion ---
-    with st.expander("➕ Planifier une réunion", expanded=True):
+    with st.expander("Planifier une réunion", expanded=True):
         with st.form("add_meeting", clear_on_submit=True):
             c1, c2 = st.columns(2)
             mdate = c1.date_input("Date", value=date.today())
@@ -66,7 +66,7 @@ def _render_meetings(project_id):
     st.subheader("Historique des réunions")
 
     for m in meetings:
-        header = f"📅 {format_date_fr(m.get('date'))} {m.get('time', '')} — {m.get('subject', '')}"
+        header = f"{format_date_fr(m.get('date'))} {m.get('time', '')} — {m.get('subject', '')}"
         with st.expander(header):
             _render_meeting_editor(m, phase_map, phases)
 
@@ -102,7 +102,7 @@ def _render_meeting_editor(meeting, phase_map, phases):
         )
 
         # --- Zone de saisie du Compte Rendu ---
-        st.markdown("**📝 Compte Rendu**")
+        st.markdown("**Compte Rendu**")
         report = st.text_area(
             "Rédigez le CR ici", value=meeting.get("report") or "",
             height=200, key=f"mr_{meeting['id']}", label_visibility="collapsed",
@@ -114,7 +114,7 @@ def _render_meeting_editor(meeting, phase_map, phases):
         if phase_id is not None:
             current_phase_obj = next((p for p in phases if p["id"] == phase_id), None)
             if current_phase_obj:
-                st.markdown(f"**📈 Avancement de la phase « {current_phase_obj['name']} »**")
+                st.markdown(f"**Avancement de la phase « {current_phase_obj['name']} »**")
                 new_progress = st.slider(
                     "Mettre à jour l'avancement (%)", 0, 100,
                     current_phase_obj.get("progress", 0),
@@ -122,8 +122,8 @@ def _render_meeting_editor(meeting, phase_map, phases):
                 )
 
         col_save, col_del = st.columns(2)
-        save = col_save.form_submit_button("💾 Enregistrer le CR")
-        delete = col_del.form_submit_button("🗑️ Supprimer la réunion")
+        save = col_save.form_submit_button("Enregistrer le CR")
+        delete = col_del.form_submit_button("Supprimer la réunion")
 
         if save:
             models.update_meeting(
@@ -177,7 +177,7 @@ def _render_auto_recap(project_id):
     st.subheader("Récapitulatif généré")
     st.code(recap, language="markdown")
     st.download_button(
-        "⬇️ Télécharger le récapitulatif (.txt)",
+        "Télécharger le récapitulatif (.txt)",
         data=recap,
         file_name=f"recap_{project['name'].replace(' ', '_')}.txt",
         mime="text/plain",

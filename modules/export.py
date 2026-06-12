@@ -22,11 +22,11 @@ import plotly.express as px
 
 
 def render(project_id):
-    st.header("💾 Export & Sauvegarde")
+    st.header("Export & Sauvegarde")
 
     project = models.get_project(project_id)
 
-    st.subheader("📄 Export des données (CSV)")
+    st.subheader("Export des données (CSV)")
     st.caption("Exportez chaque entité du projet ou l'ensemble dans une archive ZIP.")
 
     phases = models.get_phases(project_id)
@@ -46,7 +46,7 @@ def render(project_id):
     for col, (name, data) in zip(cols, datasets.items()):
         csv_bytes = _to_csv_bytes(data)
         col.download_button(
-            f"⬇️ {name}.csv",
+            f"{name}.csv",
             data=csv_bytes,
             file_name=f"{name}.csv",
             mime="text/csv",
@@ -57,7 +57,7 @@ def render(project_id):
     # Archive ZIP complète
     zip_bytes = _build_zip(datasets)
     st.download_button(
-        "📦 Télécharger toutes les données (ZIP)",
+        "Télécharger toutes les données (ZIP)",
         data=zip_bytes,
         file_name=f"export_{_safe(project['name'])}.zip",
         mime="application/zip",
@@ -67,7 +67,7 @@ def render(project_id):
     st.divider()
 
     # ---- Export graphiques ----
-    st.subheader("📊 Export des vues analytiques (image / PDF)")
+    st.subheader("Export des vues analytiques (image / PDF)")
 
     dependencies = models.get_dependencies(project_id)
     gantt_fig, _ = build_gantt_figure(tasks, dependencies, highlight_critical=True)
@@ -95,13 +95,13 @@ def render(project_id):
     if kaleido_ok:
         png_bytes = fig.to_image(format="png", width=1200, height=600, scale=2)
         c1.download_button(
-            "🖼️ PNG", data=png_bytes,
+            "PNG", data=png_bytes,
             file_name=f"{_safe(choice)}.png", mime="image/png",
             use_container_width=True,
         )
         pdf_bytes = fig.to_image(format="pdf", width=1200, height=600, scale=2)
         c2.download_button(
-            "📕 PDF", data=pdf_bytes,
+            "PDF", data=pdf_bytes,
             file_name=f"{_safe(choice)}.pdf", mime="application/pdf",
             use_container_width=True,
         )
@@ -115,7 +115,7 @@ def render(project_id):
     # HTML interactif (toujours disponible)
     html_bytes = fig.to_html(include_plotlyjs="cdn").encode("utf-8")
     c3.download_button(
-        "🌐 HTML interactif", data=html_bytes,
+        "HTML interactif", data=html_bytes,
         file_name=f"{_safe(choice)}.html", mime="text/html",
         use_container_width=True,
     )

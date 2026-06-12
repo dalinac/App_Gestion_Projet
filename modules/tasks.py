@@ -21,10 +21,10 @@ from utils.helpers import (
 
 def render(project_id):
     """Affiche l'interface de gestion des phases et tâches."""
-    st.header("🗂️ Gestion des phases & tâches")
+    st.header("Gestion des phases & tâches")
 
     tab_phases, tab_tasks, tab_deps = st.tabs(
-        ["📋 Phases", "✅ Tâches", "🔗 Dépendances"]
+        ["Phases", "Tâches", "Dépendances"]
     )
 
     with tab_phases:
@@ -43,7 +43,7 @@ def _render_phases(project_id):
     phases = models.get_phases(project_id)
 
     # --- Formulaire de création ---
-    with st.expander("➕ Ajouter une phase", expanded=not phases):
+    with st.expander("Ajouter une phase", expanded=not phases):
         with st.form("add_phase", clear_on_submit=True):
             c1, c2 = st.columns(2)
             name = c1.text_input("Nom de la phase *")
@@ -117,13 +117,13 @@ def _render_phases(project_id):
                 auto = phase_progress_from_tasks(phase_tasks)
                 if auto is not None:
                     st.caption(
-                        f"💡 Avancement calculé depuis les {len(phase_tasks)} tâche(s) : {auto}%"
+                        f"Avancement calculé depuis les {len(phase_tasks)} tâche(s) : {auto}%"
                     )
 
                 col_save, col_auto, col_del = st.columns(3)
-                save = col_save.form_submit_button("💾 Enregistrer")
-                use_auto = col_auto.form_submit_button("🔄 Utiliser l'avancement calculé")
-                delete = col_del.form_submit_button("🗑️ Supprimer")
+                save = col_save.form_submit_button("Enregistrer")
+                use_auto = col_auto.form_submit_button("Utiliser l'avancement calculé")
+                delete = col_del.form_submit_button("Supprimer")
 
                 if save:
                     models.update_phase(
@@ -157,7 +157,7 @@ def _render_tasks(project_id):
     phase_map = {p["name"]: p["id"] for p in phases}
 
     # --- Formulaire de création ---
-    with st.expander("➕ Ajouter une tâche", expanded=True):
+    with st.expander("Ajouter une tâche", expanded=True):
         with st.form("add_task", clear_on_submit=True):
             phase_name = st.selectbox("Phase *", list(phase_map.keys()))
             c1, c2 = st.columns(2)
@@ -187,7 +187,7 @@ def _render_tasks(project_id):
     # --- Liste des tâches groupées par phase ---
     for p in phases:
         phase_tasks = models.get_tasks(phase_id=p["id"])
-        st.subheader(f"📋 {p['name']} ({len(phase_tasks)} tâche·s)")
+        st.subheader(f"{p['name']} ({len(phase_tasks)} tâche·s)")
         if not phase_tasks:
             st.caption("Aucune tâche dans cette phase.")
             continue
@@ -241,8 +241,8 @@ def _render_task_editor(task, phase_map):
                 "Commentaires", value=task.get("comments") or "", key=f"tcm_{task['id']}"
             )
             col_save, col_del = st.columns(2)
-            save = col_save.form_submit_button("💾 Enregistrer")
-            delete = col_del.form_submit_button("🗑️ Supprimer")
+            save = col_save.form_submit_button("Enregistrer")
+            delete = col_del.form_submit_button("Supprimer")
             if save:
                 models.update_task(
                     task["id"], name=name, assignee=assignee,
@@ -285,7 +285,7 @@ def _render_dependencies(project_id):
         a = c2.selectbox(
             "nécessite la Tâche A (prérequis)", ids, format_func=lambda i: task_label[i]
         )
-        submitted = st.form_submit_button("🔗 Ajouter la dépendance")
+        submitted = st.form_submit_button("Ajouter la dépendance")
         if submitted:
             if a == b:
                 st.error("Une tâche ne peut pas dépendre d'elle-même.")
@@ -306,7 +306,7 @@ def _render_dependencies(project_id):
         b_label = task_label.get(d["task_id"], "?")
         a_label = task_label.get(d["depends_on_task_id"], "?")
         col1, col2 = st.columns([0.85, 0.15])
-        col1.write(f"**{b_label}** ⬅ nécessite ⬅ **{a_label}**")
-        if col2.button("🗑️", key=f"del_dep_{d['id']}"):
+        col1.write(f"**{b_label}** nécessite **{a_label}**")
+        if col2.button("", key=f"del_dep_{d['id']}"):
             models.remove_dependency(d["task_id"], d["depends_on_task_id"])
             st.rerun()

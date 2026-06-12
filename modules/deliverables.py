@@ -21,7 +21,7 @@ NATURES = ["Document", "Prototype", "Code / Logiciel", "Maquette",
 
 
 def render(project_id):
-    st.header("📦 Livrables")
+    st.header("Livrables")
 
     phases = models.get_phases(project_id)
     if not phases:
@@ -31,7 +31,7 @@ def render(project_id):
     phase_map = {p["name"]: p["id"] for p in phases}
 
     # --- Formulaire de création ---
-    with st.expander("➕ Ajouter un livrable", expanded=True):
+    with st.expander("Ajouter un livrable", expanded=True):
         with st.form("add_deliverable", clear_on_submit=True):
             c1, c2 = st.columns(2)
             name = c1.text_input("Nom du livrable *")
@@ -68,7 +68,7 @@ def render(project_id):
     ]
     if overdue:
         st.error(
-            f"⚠️ {len(overdue)} livrable·s en retard : "
+            f"{len(overdue)} livrable·s en retard : "
             + ", ".join(dl["name"] for dl in overdue)
         )
 
@@ -126,8 +126,8 @@ def render(project_id):
                     key=f"dls_{dl['id']}",
                 )
                 col_save, col_del = st.columns(2)
-                save = col_save.form_submit_button("💾 Enregistrer")
-                delete = col_del.form_submit_button("🗑️ Supprimer")
+                save = col_save.form_submit_button("Enregistrer")
+                delete = col_del.form_submit_button("Supprimer")
                 if save:
                     models.update_deliverable(
                         dl["id"], name=name, phase_id=phase_map[phase_name],

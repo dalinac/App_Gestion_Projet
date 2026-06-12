@@ -1,4 +1,4 @@
-# 📊 Application de Gestion et de Phasage de Projet
+# Application de Gestion et de Phasage de Projet
 
 Application web complète pour **piloter l'avancement d'un projet**, **anticiper les blocages**
 (chemin critique) et **centraliser la communication** autour des livrables et des réunions.
@@ -7,7 +7,7 @@ Construite avec **Python · Streamlit · Plotly · SQLite**.
 
 ---
 
-## ✨ Fonctionnalités
+## Fonctionnalités
 
 ### 1. Visualisation, planification & tableau de bord
 - **Diagramme de Gantt interactif** (Plotly) affichant les tâches par phase et dans le temps.
@@ -39,7 +39,7 @@ Construite avec **Python · Streamlit · Plotly · SQLite**.
 
 ---
 
-## 🚀 Installation & lancement
+## Installation & lancement
 
 ```bash
 # 1. (Recommandé) créer un environnement virtuel
@@ -59,7 +59,7 @@ pour illustrer toutes les fonctionnalités.
 
 ---
 
-## 🗂️ Architecture du code
+## Architecture du code
 
 Le code est **modulaire** : chaque responsabilité est isolée dans son propre fichier.
 
@@ -88,7 +88,7 @@ App_Gestion_Projet/
 
 ---
 
-## 🧠 À propos du chemin critique
+## À propos du chemin critique
 
 Le chemin critique est calculé via la **méthode CPM** (`utils/critical_path.py`) :
 1. **tri topologique** du graphe de dépendances ;
@@ -99,7 +99,7 @@ Aucune dépendance externe n'est requise pour ce calcul.
 
 ---
 
-## 💾 Stockage des données
+## Stockage des données
 
 Les données sont stockées **localement** dans `data/gestion_projet.db` (SQLite).
 Aucun serveur externe n'est nécessaire. Pour repartir d'une base vierge, supprimez
@@ -107,7 +107,7 @@ simplement ce fichier.
 
 ---
 
-## 📝 Note sur l'export d'images
+## Note sur l'export d'images
 
 L'export PNG/PDF s'appuie sur **Kaleido**. La version `0.2.1` (épinglée dans
 `requirements.txt`) embarque Chromium et fonctionne sans navigateur externe.

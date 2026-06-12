@@ -17,7 +17,7 @@ from utils.helpers import (
 
 def render(project_id):
     """Affiche la vue Action Rapide pour le projet courant."""
-    st.header("⚡ Action Rapide — À faire cette semaine")
+    st.header("Action Rapide — À faire cette semaine")
 
     today = date.today()
     start_week = today - timedelta(days=today.weekday())
@@ -45,15 +45,15 @@ def render(project_id):
 
     # ---- Tâches en retard (prioritaires) ----
     if late_tasks:
-        st.subheader("🔴 Tâches en retard")
+        st.subheader("Tâches en retard")
         for t in late_tasks:
             _render_task_row(t, overdue=True)
         st.divider()
 
     # ---- Tâches de la semaine ----
-    st.subheader("📌 Tâches de la semaine")
+    st.subheader("Tâches de la semaine")
     if not week_tasks:
-        st.success("Aucune tâche à traiter cette semaine. 🎉")
+        st.success("Aucune tâche à traiter cette semaine.")
         return
 
     for t in week_tasks:
@@ -81,12 +81,11 @@ def _render_task_row(task, overdue=False):
 
     # Nom + phase
     phase = task.get("phase_name", "")
-    icon = "🔴 " if overdue else ""
-    cols[1].markdown(f"{icon}**{task['name']}**  \n_{phase}_")
+    cols[1].markdown(f"**{task['name']}**  \n_{phase}_")
 
     # Échéance + responsable
-    cols[2].write(f"📅 {format_date_fr(task.get('end_date'))}")
-    cols[2].caption(f"👤 {task.get('assignee') or '—'}")
+    cols[2].write(f"{format_date_fr(task.get('end_date'))}")
+    cols[2].caption(f"{task.get('assignee') or '—'}")
 
     # Statut rapide
     current = task.get("status", "À faire")

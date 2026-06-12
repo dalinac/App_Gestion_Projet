@@ -27,7 +27,7 @@ def render(project_id):
     dependencies = models.get_dependencies(project_id)
     deliverables = models.get_deliverables(project_id)
 
-    st.header(f"📊 Tableau de bord — {project['name']}")
+    st.header(f"Tableau de bord — {project['name']}")
     if project.get("description"):
         st.caption(project["description"])
 
@@ -49,7 +49,7 @@ def render(project_id):
     st.divider()
 
     # ---- Diagramme de Gantt + chemin critique ----
-    st.subheader("📅 Diagramme de Gantt")
+    st.subheader("Diagramme de Gantt")
     highlight = st.checkbox("Mettre en évidence le chemin critique", value=True)
     fig, cp = build_gantt_figure(tasks, dependencies, highlight_critical=highlight)
     if fig:
@@ -57,7 +57,7 @@ def render(project_id):
         if cp["critical_ids"]:
             critical_names = [t["name"] for t in tasks if t["id"] in cp["critical_ids"]]
             st.warning(
-                "⚠️ **Chemin critique** (tout retard décale la fin du projet) : "
+                "**Chemin critique** (tout retard décale la fin du projet) : "
                 + ", ".join(critical_names)
             )
     else:
@@ -69,17 +69,17 @@ def render(project_id):
     left, right = st.columns(2)
 
     with left:
-        st.subheader("🥧 Part de chaque phase")
+        st.subheader("Part de chaque phase")
         _render_phase_pie(phases)
 
     with right:
-        st.subheader("📈 Avancement par phase")
+        st.subheader("Avancement par phase")
         _render_phase_progress(phases)
 
     st.divider()
 
     # ---- Vue macro des phases ----
-    st.subheader("🗂️ Vue macro des phases")
+    st.subheader("Vue macro des phases")
     macro = build_phase_gantt(phases)
     if macro:
         st.plotly_chart(macro, use_container_width=True)
