@@ -16,7 +16,7 @@ import streamlit as st
 from datetime import date
 
 from database.db import init_db
-from database import models
+from database import db, models
 from modules import dashboard, todo, tasks, deliverables, meetings, export, theme
 
 
@@ -149,7 +149,7 @@ def main():
         export.render(project_id)
 
     st.sidebar.divider()
-    st.sidebar.caption("Données stockées localement (SQLite).")
+    st.sidebar.caption(f"Stockage : {db.backend_label()}")
 
 
 if __name__ == "__main__":

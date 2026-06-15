@@ -1,9 +1,11 @@
 # Application de Gestion et de Phasage de Projet
 
+### 🔗 Application en ligne : **[gestion-suivi-projet.streamlit.app](https://gestion-suivi-projet.streamlit.app)**
+
 Application web complète pour **piloter l'avancement d'un projet**, **anticiper les blocages**
 (chemin critique) et **centraliser la communication** autour des livrables et des réunions.
 
-Construite avec **Python · Streamlit · Plotly · SQLite**.
+Construite avec **Python · Streamlit · Plotly · SQLAlchemy** (SQLite en local, **PostgreSQL/Supabase** en ligne).
 
 ---
 
@@ -70,7 +72,7 @@ App_Gestion_Projet/
 ├── README.md
 ├── .streamlit/config.toml    # Thème & configuration serveur
 ├── database/
-│   ├── db.py                 # Connexion SQLite, schéma, données de démo
+│   ├── db.py                 # Moteur SQLAlchemy (SQLite local / PostgreSQL), schéma, démo
 │   └── models.py             # CRUD (projets, phases, tâches, livrables, réunions)
 ├── modules/
 │   ├── dashboard.py          # Tableau de bord (Gantt, camembert, KPI)
@@ -79,6 +81,7 @@ App_Gestion_Projet/
 │   ├── tasks.py              # Gestion phases / tâches / dépendances / versions
 │   ├── deliverables.py       # Module Livrables
 │   ├── meetings.py           # Réunions, CR, récapitulatif automatique
+│   ├── theme.py              # Habillage (couleurs, polices, bannières)
 │   └── export.py             # Export CSV / PNG / PDF / HTML / ZIP
 ├── utils/
 │   ├── critical_path.py      # Calcul du chemin critique (CPM)
@@ -99,11 +102,59 @@ Aucune dépendance externe n'est requise pour ce calcul.
 
 ---
 
-## Stockage des données
+## Stockage des données (local & persistant en ligne)
 
-Les données sont stockées **localement** dans `data/gestion_projet.db` (SQLite).
-Aucun serveur externe n'est nécessaire. Pour repartir d'une base vierge, supprimez
-simplement ce fichier.
+L'application utilise **deux moteurs de base de données**, choisis automatiquement :
+
+| Contexte | Moteur utilisé | Persistance |
+|----------|----------------|-------------|
+| En local (aucune configuration) | **SQLite** (`data/gestion_projet.db`) | fichier local |
+| Avec un secret `DATABASE_URL` | **PostgreSQL** (ex. Supabase) | **permanente** ✅ |
+
+> ⚠️ **Important pour Streamlit Community Cloud** : le système de fichiers y est
+> *éphémère*. Sans base externe, un fichier SQLite serait **effacé à chaque
+> redémarrage** du serveur. Il faut donc brancher une base PostgreSQL gratuite
+> (Supabase) — voir la section suivante.
+
+Le code détecte la présence du secret `DATABASE_URL` : s'il existe, il se
+connecte à PostgreSQL ; sinon il retombe sur SQLite. Aucun changement de code
+n'est nécessaire pour passer de l'un à l'autre.
+
+---
+
+## 🚀 Déploiement persistant : Streamlit Cloud + Supabase (pas à pas)
+
+### Étape 1 — Créer une base PostgreSQL gratuite sur Supabase
+1. Créez un compte sur **https://supabase.com** (gratuit) puis cliquez sur **New project**.
+2. Donnez un **nom**, choisissez une **région** proche, et définissez un
+   **Database Password** (notez-le, il sert à l'étape 2).
+3. Attendez ~1 minute que la base soit prête.
+
+### Étape 2 — Récupérer l'URL de connexion (« Session pooler »)
+1. Dans le projet Supabase : bouton **Connect** (en haut) → onglet **Connection string**.
+2. Choisissez **Session pooler** (important : compatible avec Streamlit Cloud
+   qui ne supporte que l'IPv4) et copiez l'URI. Elle ressemble à :
+   ```
+   postgresql://postgres.abcdefgh:[email protected]:5432/postgres
+   ```
+3. Remplacez `[YOUR-PASSWORD]` par le mot de passe défini à l'étape 1.
+
+### Étape 3 — Déclarer le secret sur Streamlit Community Cloud
+1. Déployez l'app depuis **https://share.streamlit.io** (connecté à ce dépôt GitHub,
+   fichier principal `app.py`).
+2. Ouvrez **⋮ → Settings → Secrets** (ou « Manage app » → onglet **Secrets**).
+3. Collez **exactement** cette ligne (avec votre URL), puis **Save** :
+   ```toml
+   DATABASE_URL = "postgresql://postgres.abcdefgh:[email protected]:5432/postgres"
+   ```
+4. L'application redémarre seule : elle crée les tables automatiquement et passe
+   en mode **persistant**. La barre latérale affiche alors « Stockage :
+   PostgreSQL (persistant) ».
+
+> 💡 **Test en local de la base en ligne** (facultatif) : copiez
+> `.streamlit/secrets.toml.example` en `.streamlit/secrets.toml` et collez-y la
+> même ligne `DATABASE_URL`. Ce fichier est ignoré par Git (jamais publié).
+> Sans ce fichier, l'app reste sur SQLite local.
 
 ---
 

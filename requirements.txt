@@ -3,6 +3,9 @@
 streamlit>=1.43.0
 plotly>=5.18.0
 pandas>=2.0.0
+# Accès base de données : SQLAlchemy (SQLite en local, PostgreSQL/Supabase en ligne)
+SQLAlchemy>=2.0.0
+psycopg2-binary>=2.9.0
 # Export d'images/PDF des graphiques Plotly (optionnel mais recommandé).
 # La version 0.2.1 embarque Chromium et fonctionne sans navigateur externe ;
 # les versions >=1.0 nécessitent une installation séparée de Google Chrome.

@@ -1,17 +1,27 @@
 """
-Couche d'accès aux données (CRUD) au-dessus de SQLite.
+Couche d'accès aux données (CRUD) au-dessus de SQLAlchemy.
 
-Chaque entité (projet, phase, tâche, dépendance, livrable, réunion) dispose de
-fonctions de lecture / création / mise à jour / suppression. Les fonctions
-retournent des dictionnaires Python pour rester indépendantes de l'UI.
+Le SQL est portable entre SQLite (local) et PostgreSQL/Supabase (cloud) :
+paramètres nommés (:nom), ``RETURNING id`` pour récupérer la clé créée et
+``ON CONFLICT DO NOTHING`` pour les insertions idempotentes. Les fonctions
+retournent des dictionnaires Python pour rester indépendantes de l'interface.
 """
 
-from database.db import db_session
+from sqlalchemy import text
+
+from database.db import db_session, rows_to_dicts, row_to_dict
 
 
-def _rows_to_dicts(rows):
-    """Convertit une liste de sqlite3.Row en liste de dict."""
-    return [dict(r) for r in rows]
+def _build_set_clause(fields, allowed):
+    """
+    Construit la clause ``SET col=:col`` pour une mise à jour dynamique.
+    Retourne (clause_sql, dict_paramètres) ou (None, None) si rien à mettre à jour.
+    """
+    sets = {k: v for k, v in fields.items() if k in allowed}
+    if not sets:
+        return None, None
+    clause = ", ".join(f"{k}=:{k}" for k in sets)
+    return clause, sets
 
 
 # ===========================================================================
@@ -20,36 +30,41 @@ def _rows_to_dicts(rows):
 
 def get_projects():
     with db_session() as conn:
-        rows = conn.execute("SELECT * FROM projects ORDER BY created_at DESC").fetchall()
-        return _rows_to_dicts(rows)
+        res = conn.execute(text("SELECT * FROM projects ORDER BY created_at DESC, id DESC"))
+        return rows_to_dicts(res)
 
 
 def get_project(project_id):
     with db_session() as conn:
-        row = conn.execute("SELECT * FROM projects WHERE id=?", (project_id,)).fetchone()
-        return dict(row) if row else None
+        res = conn.execute(text("SELECT * FROM projects WHERE id=:id"), {"id": project_id})
+        return row_to_dict(res)
 
 
 def create_project(name, description, start_date, end_date):
     with db_session() as conn:
-        cur = conn.execute(
-            "INSERT INTO projects (name, description, start_date, end_date) VALUES (?,?,?,?)",
-            (name, description, start_date, end_date),
-        )
-        return cur.lastrowid
+        return conn.execute(
+            text("""INSERT INTO projects (name, description, start_date, end_date)
+                    VALUES (:name, :description, :start_date, :end_date) RETURNING id"""),
+            {"name": name, "description": description,
+             "start_date": start_date, "end_date": end_date},
+        ).scalar()
 
 
 def update_project(project_id, name, description, start_date, end_date):
     with db_session() as conn:
         conn.execute(
-            "UPDATE projects SET name=?, description=?, start_date=?, end_date=? WHERE id=?",
-            (name, description, start_date, end_date, project_id),
+            text("""UPDATE projects
+                    SET name=:name, description=:description,
+                        start_date=:start_date, end_date=:end_date
+                    WHERE id=:id"""),
+            {"name": name, "description": description, "start_date": start_date,
+             "end_date": end_date, "id": project_id},
         )
 
 
 def delete_project(project_id):
     with db_session() as conn:
-        conn.execute("DELETE FROM projects WHERE id=?", (project_id,))
+        conn.execute(text("DELETE FROM projects WHERE id=:id"), {"id": project_id})
 
 
 # ===========================================================================
@@ -58,58 +73,61 @@ def delete_project(project_id):
 
 def get_phases(project_id):
     with db_session() as conn:
-        rows = conn.execute(
-            "SELECT * FROM phases WHERE project_id=? ORDER BY order_index, id",
-            (project_id,),
-        ).fetchall()
-        return _rows_to_dicts(rows)
+        res = conn.execute(
+            text("SELECT * FROM phases WHERE project_id=:p ORDER BY order_index, id"),
+            {"p": project_id},
+        )
+        return rows_to_dicts(res)
 
 
 def get_phase(phase_id):
     with db_session() as conn:
-        row = conn.execute("SELECT * FROM phases WHERE id=?", (phase_id,)).fetchone()
-        return dict(row) if row else None
+        res = conn.execute(text("SELECT * FROM phases WHERE id=:id"), {"id": phase_id})
+        return row_to_dict(res)
 
 
 def create_phase(project_id, name, description, start_date, end_date,
                  status="À faire", progress=0, version="V1", color="#C9A66B",
                  order_index=0, comments=""):
     with db_session() as conn:
-        cur = conn.execute(
-            """INSERT INTO phases
-               (project_id, name, description, start_date, end_date, status,
-                progress, version, color, order_index, comments)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-            (project_id, name, description, start_date, end_date, status,
-             progress, version, color, order_index, comments),
-        )
-        return cur.lastrowid
+        return conn.execute(
+            text("""INSERT INTO phases
+                    (project_id, name, description, start_date, end_date, status,
+                     progress, version, color, order_index, comments)
+                    VALUES (:project_id, :name, :description, :start_date, :end_date,
+                            :status, :progress, :version, :color, :order_index, :comments)
+                    RETURNING id"""),
+            {"project_id": project_id, "name": name, "description": description,
+             "start_date": start_date, "end_date": end_date, "status": status,
+             "progress": progress, "version": version, "color": color,
+             "order_index": order_index, "comments": comments},
+        ).scalar()
 
 
 def update_phase(phase_id, **fields):
     """Met à jour dynamiquement les champs fournis d'une phase."""
-    if not fields:
-        return
     allowed = {"name", "description", "start_date", "end_date", "status",
                "progress", "version", "color", "order_index", "comments"}
-    sets = {k: v for k, v in fields.items() if k in allowed}
-    if not sets:
+    clause, params = _build_set_clause(fields, allowed)
+    if not clause:
         return
-    clause = ", ".join(f"{k}=?" for k in sets)
-    values = list(sets.values()) + [phase_id]
+    params["id"] = phase_id
     with db_session() as conn:
-        conn.execute(f"UPDATE phases SET {clause} WHERE id=?", values)
+        conn.execute(text(f"UPDATE phases SET {clause} WHERE id=:id"), params)
 
 
 def update_phase_progress(phase_id, progress):
     """Raccourci pour mettre à jour uniquement l'avancement d'une phase."""
     with db_session() as conn:
-        conn.execute("UPDATE phases SET progress=? WHERE id=?", (progress, phase_id))
+        conn.execute(
+            text("UPDATE phases SET progress=:pr WHERE id=:id"),
+            {"pr": progress, "id": phase_id},
+        )
 
 
 def delete_phase(phase_id):
     with db_session() as conn:
-        conn.execute("DELETE FROM phases WHERE id=?", (phase_id,))
+        conn.execute(text("DELETE FROM phases WHERE id=:id"), {"id": phase_id})
 
 
 # ===========================================================================
@@ -118,64 +136,65 @@ def delete_phase(phase_id):
 
 def get_tasks(phase_id=None, project_id=None):
     """
-    Récupère les tâches. Filtrable par phase ou par projet entier
+    Récupère les tâches, filtrables par phase ou par projet entier
     (jointure phases pour récupérer toutes les tâches d'un projet).
     """
     with db_session() as conn:
         if phase_id is not None:
-            rows = conn.execute(
-                "SELECT * FROM tasks WHERE phase_id=? ORDER BY start_date, id",
-                (phase_id,),
-            ).fetchall()
+            res = conn.execute(
+                text("SELECT * FROM tasks WHERE phase_id=:p ORDER BY start_date, id"),
+                {"p": phase_id},
+            )
         elif project_id is not None:
-            rows = conn.execute(
-                """SELECT t.*, p.name AS phase_name, p.color AS phase_color
-                   FROM tasks t
-                   JOIN phases p ON t.phase_id = p.id
-                   WHERE p.project_id=?
-                   ORDER BY t.start_date, t.id""",
-                (project_id,),
-            ).fetchall()
+            res = conn.execute(
+                text("""SELECT t.*, p.name AS phase_name, p.color AS phase_color
+                        FROM tasks t
+                        JOIN phases p ON t.phase_id = p.id
+                        WHERE p.project_id=:p
+                        ORDER BY t.start_date, t.id"""),
+                {"p": project_id},
+            )
         else:
-            rows = conn.execute("SELECT * FROM tasks ORDER BY start_date, id").fetchall()
-        return _rows_to_dicts(rows)
+            res = conn.execute(text("SELECT * FROM tasks ORDER BY start_date, id"))
+        return rows_to_dicts(res)
 
 
 def get_task(task_id):
     with db_session() as conn:
-        row = conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
-        return dict(row) if row else None
+        res = conn.execute(text("SELECT * FROM tasks WHERE id=:id"), {"id": task_id})
+        return row_to_dict(res)
 
 
 def create_task(phase_id, name, description, start_date, end_date,
                 status="À faire", progress=0, assignee="", comments=""):
     with db_session() as conn:
-        cur = conn.execute(
-            """INSERT INTO tasks
-               (phase_id, name, description, start_date, end_date, status,
-                progress, assignee, comments)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
-            (phase_id, name, description, start_date, end_date, status,
-             progress, assignee, comments),
-        )
-        return cur.lastrowid
+        return conn.execute(
+            text("""INSERT INTO tasks
+                    (phase_id, name, description, start_date, end_date, status,
+                     progress, assignee, comments)
+                    VALUES (:phase_id, :name, :description, :start_date, :end_date,
+                            :status, :progress, :assignee, :comments)
+                    RETURNING id"""),
+            {"phase_id": phase_id, "name": name, "description": description,
+             "start_date": start_date, "end_date": end_date, "status": status,
+             "progress": progress, "assignee": assignee, "comments": comments},
+        ).scalar()
 
 
 def update_task(task_id, **fields):
     allowed = {"name", "description", "start_date", "end_date", "status",
                "progress", "assignee", "comments", "phase_id"}
-    sets = {k: v for k, v in fields.items() if k in allowed}
-    if not sets:
+    clause, params = _build_set_clause(fields, allowed)
+    if not clause:
         return
-    clause = ", ".join(f"{k}=?" for k in sets)
-    values = list(sets.values()) + [task_id]
+    params["id"] = task_id
     with db_session() as conn:
-        conn.execute(f"UPDATE tasks SET {clause} WHERE id=?", values)
+        conn.execute(text(f"UPDATE tasks SET {clause} WHERE id=:id"), params)
 
 
 def delete_task(task_id):
     with db_session() as conn:
-        conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+        conn.execute(text("DELETE FROM tasks WHERE id=:id"), {"id": task_id})
 
 
 # ===========================================================================
@@ -185,41 +204,43 @@ def delete_task(task_id):
 def get_dependencies(project_id):
     """Retourne toutes les dépendances des tâches d'un projet."""
     with db_session() as conn:
-        rows = conn.execute(
-            """SELECT d.* FROM dependencies d
-               JOIN tasks t ON d.task_id = t.id
-               JOIN phases p ON t.phase_id = p.id
-               WHERE p.project_id=?""",
-            (project_id,),
-        ).fetchall()
-        return _rows_to_dicts(rows)
+        res = conn.execute(
+            text("""SELECT d.* FROM dependencies d
+                    JOIN tasks t ON d.task_id = t.id
+                    JOIN phases p ON t.phase_id = p.id
+                    WHERE p.project_id=:p"""),
+            {"p": project_id},
+        )
+        return rows_to_dicts(res)
 
 
 def get_task_dependencies(task_id):
-    """Retourne les tâches dont dépend la tâche donnée."""
+    """Retourne les ids des tâches dont dépend la tâche donnée."""
     with db_session() as conn:
-        rows = conn.execute(
-            "SELECT depends_on_task_id FROM dependencies WHERE task_id=?",
-            (task_id,),
-        ).fetchall()
-        return [r["depends_on_task_id"] for r in rows]
+        res = conn.execute(
+            text("SELECT depends_on_task_id FROM dependencies WHERE task_id=:id"),
+            {"id": task_id},
+        )
+        return [r["depends_on_task_id"] for r in res.mappings().all()]
 
 
 def add_dependency(task_id, depends_on_task_id):
     if task_id == depends_on_task_id:
-        return  # une tâche ne peut dépendre d'elle-même
+        return  # une tâche ne peut pas dépendre d'elle-même
     with db_session() as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO dependencies (task_id, depends_on_task_id) VALUES (?,?)",
-            (task_id, depends_on_task_id),
+            text("""INSERT INTO dependencies (task_id, depends_on_task_id)
+                    VALUES (:t, :d) ON CONFLICT DO NOTHING"""),
+            {"t": task_id, "d": depends_on_task_id},
         )
 
 
 def remove_dependency(task_id, depends_on_task_id):
     with db_session() as conn:
         conn.execute(
-            "DELETE FROM dependencies WHERE task_id=? AND depends_on_task_id=?",
-            (task_id, depends_on_task_id),
+            text("""DELETE FROM dependencies
+                    WHERE task_id=:t AND depends_on_task_id=:d"""),
+            {"t": task_id, "d": depends_on_task_id},
         )
 
 
@@ -229,41 +250,41 @@ def remove_dependency(task_id, depends_on_task_id):
 
 def get_deliverables(project_id):
     with db_session() as conn:
-        rows = conn.execute(
-            """SELECT dl.*, p.name AS phase_name
-               FROM deliverables dl
-               JOIN phases p ON dl.phase_id = p.id
-               WHERE p.project_id=?
-               ORDER BY dl.due_date""",
-            (project_id,),
-        ).fetchall()
-        return _rows_to_dicts(rows)
+        res = conn.execute(
+            text("""SELECT dl.*, p.name AS phase_name
+                    FROM deliverables dl
+                    JOIN phases p ON dl.phase_id = p.id
+                    WHERE p.project_id=:p
+                    ORDER BY dl.due_date"""),
+            {"p": project_id},
+        )
+        return rows_to_dicts(res)
 
 
 def create_deliverable(phase_id, name, nature, due_date, recipient, status="À faire"):
     with db_session() as conn:
-        cur = conn.execute(
-            """INSERT INTO deliverables (phase_id, name, nature, due_date, recipient, status)
-               VALUES (?,?,?,?,?,?)""",
-            (phase_id, name, nature, due_date, recipient, status),
-        )
-        return cur.lastrowid
+        return conn.execute(
+            text("""INSERT INTO deliverables (phase_id, name, nature, due_date, recipient, status)
+                    VALUES (:phase_id, :name, :nature, :due_date, :recipient, :status)
+                    RETURNING id"""),
+            {"phase_id": phase_id, "name": name, "nature": nature,
+             "due_date": due_date, "recipient": recipient, "status": status},
+        ).scalar()
 
 
 def update_deliverable(deliverable_id, **fields):
     allowed = {"name", "nature", "due_date", "recipient", "status", "phase_id"}
-    sets = {k: v for k, v in fields.items() if k in allowed}
-    if not sets:
+    clause, params = _build_set_clause(fields, allowed)
+    if not clause:
         return
-    clause = ", ".join(f"{k}=?" for k in sets)
-    values = list(sets.values()) + [deliverable_id]
+    params["id"] = deliverable_id
     with db_session() as conn:
-        conn.execute(f"UPDATE deliverables SET {clause} WHERE id=?", values)
+        conn.execute(text(f"UPDATE deliverables SET {clause} WHERE id=:id"), params)
 
 
 def delete_deliverable(deliverable_id):
     with db_session() as conn:
-        conn.execute("DELETE FROM deliverables WHERE id=?", (deliverable_id,))
+        conn.execute(text("DELETE FROM deliverables WHERE id=:id"), {"id": deliverable_id})
 
 
 # ===========================================================================
@@ -272,45 +293,46 @@ def delete_deliverable(deliverable_id):
 
 def get_meetings(project_id):
     with db_session() as conn:
-        rows = conn.execute(
-            """SELECT m.*, p.name AS phase_name
-               FROM meetings m
-               LEFT JOIN phases p ON m.phase_id = p.id
-               WHERE m.project_id=?
-               ORDER BY m.date DESC, m.time DESC""",
-            (project_id,),
-        ).fetchall()
-        return _rows_to_dicts(rows)
+        res = conn.execute(
+            text("""SELECT m.*, p.name AS phase_name
+                    FROM meetings m
+                    LEFT JOIN phases p ON m.phase_id = p.id
+                    WHERE m.project_id=:p
+                    ORDER BY m.date DESC, m.time DESC"""),
+            {"p": project_id},
+        )
+        return rows_to_dicts(res)
 
 
 def get_meeting(meeting_id):
     with db_session() as conn:
-        row = conn.execute("SELECT * FROM meetings WHERE id=?", (meeting_id,)).fetchone()
-        return dict(row) if row else None
+        res = conn.execute(text("SELECT * FROM meetings WHERE id=:id"), {"id": meeting_id})
+        return row_to_dict(res)
 
 
 def create_meeting(project_id, phase_id, date, time, participants, subject, report=""):
     with db_session() as conn:
-        cur = conn.execute(
-            """INSERT INTO meetings
-               (project_id, phase_id, date, time, participants, subject, report)
-               VALUES (?,?,?,?,?,?,?)""",
-            (project_id, phase_id, date, time, participants, subject, report),
-        )
-        return cur.lastrowid
+        return conn.execute(
+            text("""INSERT INTO meetings
+                    (project_id, phase_id, date, time, participants, subject, report)
+                    VALUES (:project_id, :phase_id, :date, :time, :participants, :subject, :report)
+                    RETURNING id"""),
+            {"project_id": project_id, "phase_id": phase_id, "date": date,
+             "time": time, "participants": participants, "subject": subject,
+             "report": report},
+        ).scalar()
 
 
 def update_meeting(meeting_id, **fields):
     allowed = {"phase_id", "date", "time", "participants", "subject", "report"}
-    sets = {k: v for k, v in fields.items() if k in allowed}
-    if not sets:
+    clause, params = _build_set_clause(fields, allowed)
+    if not clause:
         return
-    clause = ", ".join(f"{k}=?" for k in sets)
-    values = list(sets.values()) + [meeting_id]
+    params["id"] = meeting_id
     with db_session() as conn:
-        conn.execute(f"UPDATE meetings SET {clause} WHERE id=?", values)
+        conn.execute(text(f"UPDATE meetings SET {clause} WHERE id=:id"), params)
 
 
 def delete_meeting(meeting_id):
     with db_session() as conn:
-        conn.execute("DELETE FROM meetings WHERE id=?", (meeting_id,))
+        conn.execute(text("DELETE FROM meetings WHERE id=:id"), {"id": meeting_id})
