@@ -78,7 +78,7 @@ CREATE TABLE IF NOT EXISTS phases (
     status      TEXT DEFAULT 'À faire',     -- À faire / En cours / Terminé / En attente
     progress    INTEGER DEFAULT 0,          -- pourcentage 0..100
     version     TEXT DEFAULT 'V1',          -- suivi d'itérations (V1, V2, ...)
-    color       TEXT DEFAULT '#A9D6F5',
+    color       TEXT DEFAULT '#C9A66B',
     order_index INTEGER DEFAULT 0,
     comments    TEXT,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
@@ -175,11 +175,11 @@ def _seed_demo(conn):
 
     # --- Phases (avec couleurs, versions et avancement) ---
     phases = [
-        ("Cadrage & Besoins", d(-10), d(0), "Terminé", 100, "V1", "#A9D6F5"),
-        ("Conception", d(0), d(15), "En cours", 60, "V1", "#FFD3B6"),
-        ("Développement", d(12), d(40), "En cours", 25, "V2", "#A8E6CF"),
-        ("Tests & Validation", d(38), d(52), "À faire", 0, "V1", "#F7B7D7"),
-        ("Déploiement", d(50), d(60), "À faire", 0, "V1", "#C9A7F0"),
+        ("Cadrage & Besoins", d(-10), d(0), "Terminé", 100, "V1", "#C9A66B"),
+        ("Conception", d(0), d(15), "En cours", 60, "V1", "#CBA890"),
+        ("Développement", d(12), d(40), "En cours", 25, "V2", "#A9B388"),
+        ("Tests & Validation", d(38), d(52), "À faire", 0, "V1", "#B5A081"),
+        ("Déploiement", d(50), d(60), "À faire", 0, "V1", "#9C8B7A"),
     ]
     phase_ids = []
     for i, (name, s, e, status, prog, ver, color) in enumerate(phases):

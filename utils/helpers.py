@@ -8,18 +8,18 @@ from datetime import datetime, date, timedelta
 # Statuts possibles pour tâches / phases / livrables
 STATUSES = ["À faire", "En cours", "En attente", "Terminé"]
 
-# Couleurs pastel associées aux statuts (utilisées dans les vues)
+# Couleurs (tons naturels) associées aux statuts
 STATUS_COLORS = {
-    "À faire": "#D7CCE0",
-    "En cours": "#FFD3B6",
-    "En attente": "#F7B7D7",
-    "Terminé": "#A8E6CF",
+    "À faire": "#C9C0B2",
+    "En cours": "#D4B483",
+    "En attente": "#C8967E",
+    "Terminé": "#A9B388",
 }
 
-# Palette pastel par défaut pour les phases
+# Palette élégante par défaut pour les phases (crème, ocre, taupe, brun, sauge)
 PHASE_PALETTE = [
-    "#A9D6F5", "#FFD3B6", "#A8E6CF", "#F7B7D7", "#C9A7F0",
-    "#FFC8DD", "#BDB2FF", "#CAFFBF", "#FDE2A7", "#B5EAD7",
+    "#C9A66B", "#B5A081", "#A9B388", "#CBA890", "#9C8B7A",
+    "#D8C3A5", "#B08968", "#C4B7A6", "#D4B483", "#A98B6F",
 ]
 
 

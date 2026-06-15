@@ -81,7 +81,7 @@ def build_gantt_figure(tasks, dependencies, highlight_critical=True):
                 task = next((r for r in rows if r["Tâche"] == y_val), None)
                 if task and task["_id"] in critical_ids:
                     line_widths.append(3)
-                    line_colors.append("#D62728")  # rouge
+                    line_colors.append("#A8443A")  # rouge brique (chemin critique)
                 else:
                     line_widths.append(0)
                     line_colors.append("rgba(0,0,0,0)")

@@ -23,7 +23,7 @@ import plotly.express as px
 
 
 def render(project_id):
-    theme.banner("Export & Sauvegarde", "Récupère tes données et tes graphiques en un clic.")
+    theme.banner("Export & Sauvegarde", "Récupérez vos données et vos graphiques en un clic.")
 
     project = models.get_project(project_id)
 

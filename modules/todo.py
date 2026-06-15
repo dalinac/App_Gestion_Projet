@@ -18,7 +18,7 @@ from utils.helpers import (
 
 def render(project_id):
     """Affiche la vue Action Rapide pour le projet courant."""
-    theme.banner("Action Rapide", "Tes tâches à faire cette semaine, en un coup d'œil.")
+    theme.banner("Action Rapide", "Vos tâches de la semaine, en un coup d'œil.")
 
     today = date.today()
     start_week = today - timedelta(days=today.weekday())

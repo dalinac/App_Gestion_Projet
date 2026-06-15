@@ -22,7 +22,7 @@ from utils.helpers import (
 
 def render(project_id):
     """Affiche l'interface de gestion des phases et tâches."""
-    theme.banner("Phases & Tâches", "Organise tes phases, tâches, versions et dépendances.")
+    theme.banner("Phases & Tâches", "Organisez vos phases, tâches, versions et dépendances.")
 
     tab_phases, tab_tasks, tab_deps = st.tabs(
         ["Phases", "Tâches", "Dépendances"]

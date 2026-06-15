@@ -22,7 +22,7 @@ NATURES = ["Document", "Prototype", "Code / Logiciel", "Maquette",
 
 
 def render(project_id):
-    theme.banner("Livrables", "Ce que tu dois rendre, à qui et pour quand.")
+    theme.banner("Livrables", "Vos rendus, leurs échéances et leurs destinataires.")
 
     phases = models.get_phases(project_id)
     if not phases:

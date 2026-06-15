@@ -1,9 +1,9 @@
-# Configuration de l'interface Streamlit — thème pastel et doux
+# Configuration de l'interface Streamlit — thème élégant et chaleureux
 [theme]
-primaryColor = "#E58BBB"            # rose poudré (accents, sliders, focus)
-backgroundColor = "#FFF6FB"         # fond principal très clair rosé
-secondaryBackgroundColor = "#F3EAFB" # cartes / barre latérale (lavande pastel)
-textColor = "#6B5876"               # mauve profond, doux à lire
+primaryColor = "#B49063"            # caramel (accents, sliders, focus)
+backgroundColor = "#FBF8F2"         # crème, fond principal
+secondaryBackgroundColor = "#F1E9DA" # sable, cartes / barre latérale
+textColor = "#5C4A38"               # brun chaleureux, doux à lire
 font = "sans serif"
 
 [server]

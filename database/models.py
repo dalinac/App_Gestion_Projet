@@ -72,7 +72,7 @@ def get_phase(phase_id):
 
 
 def create_phase(project_id, name, description, start_date, end_date,
-                 status="À faire", progress=0, version="V1", color="#A9D6F5",
+                 status="À faire", progress=0, version="V1", color="#C9A66B",
                  order_index=0, comments=""):
     with db_session() as conn:
         cur = conn.execute(

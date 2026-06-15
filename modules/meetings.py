@@ -23,7 +23,7 @@ DEFAULT_TIME = dtime(9, 0)
 
 
 def render(project_id):
-    theme.banner("Réunions & Communication", "Planifie, prends tes notes et partage les avancées.")
+    theme.banner("Réunions & Communication", "Planifiez, consignez et partagez vos avancées.")
 
     tab_meet, tab_recap = st.tabs(["Réunions & CR", "Récapitulatif automatique"])
     with tab_meet:

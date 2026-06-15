@@ -47,14 +47,15 @@ def select_project():
     st.sidebar.markdown(
         """
         <div style="
-            font-family:'Baloo 2', sans-serif;
-            font-size:1.5rem; font-weight:700;
-            text-align:center; color:#B5519A;
+            font-family:'Playfair Display', Georgia, serif;
+            font-size:1.6rem; font-weight:700;
+            text-align:center; color:#8A6D45;
             padding:8px 0 4px 0;">
             Mes Projets
         </div>
-        <div style="text-align:center; color:#9C7BB0; font-size:0.85rem; margin-bottom:8px;">
-            Pilote tes phases en douceur
+        <div style="text-align:center; color:#9C8466; font-size:0.85rem;
+                    font-style:italic; margin-bottom:8px;">
+            Gérez vos phases avec élégance
         </div>
         """,
         unsafe_allow_html=True,
@@ -115,7 +116,7 @@ def main():
     if project_id is None:
         theme.banner(
             "Bienvenue",
-            "Crée ton premier projet depuis la barre latérale pour commencer.",
+            "Créez votre premier projet depuis la barre latérale pour commencer.",
         )
         return
 
