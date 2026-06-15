@@ -11,6 +11,7 @@ import plotly.graph_objects as go
 
 from utils.helpers import parse_date
 from utils.critical_path import compute_critical_path
+from modules import theme
 
 
 def build_gantt_figure(tasks, dependencies, highlight_critical=True):
@@ -51,8 +52,12 @@ def build_gantt_figure(tasks, dependencies, highlight_critical=True):
             "Statut": t.get("status", ""),
             "Critique": "Oui" if t["id"] in critical_ids else "Non",
             "_id": t["id"],
-            "_color": t.get("phase_color", "#4C78A8"),
+            "_color": t.get("phase_color", "#A9D6F5"),
         })
+
+    # Associe chaque phase à sa couleur (pastel) définie par l'utilisateur,
+    # sinon px.timeline appliquerait sa palette par défaut (couleurs vives).
+    color_map = {r["Phase"]: r["_color"] for r in rows}
 
     fig = px.timeline(
         rows,
@@ -60,6 +65,7 @@ def build_gantt_figure(tasks, dependencies, highlight_critical=True):
         x_end="Fin",
         y="Tâche",
         color="Phase",
+        color_discrete_map=color_map,
         hover_data=["Responsable", "Statut", "Avancement", "Critique"],
     )
     # Les tâches sont affichées de haut en bas dans l'ordre chronologique
@@ -90,6 +96,7 @@ def build_gantt_figure(tasks, dependencies, highlight_critical=True):
         legend_title="Phases",
         margin=dict(l=10, r=10, t=60, b=10),
     )
+    theme.style_fig(fig)
     return fig, cp
 
 
@@ -129,4 +136,5 @@ def build_phase_gantt(phases):
         height=max(300, 50 * len(valid) + 120),
         margin=dict(l=10, r=10, t=60, b=10),
     )
+    theme.style_fig(fig)
     return fig

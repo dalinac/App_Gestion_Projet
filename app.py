@@ -17,16 +17,19 @@ from datetime import date
 
 from database.db import init_db
 from database import models
-from modules import dashboard, todo, tasks, deliverables, meetings, export
+from modules import dashboard, todo, tasks, deliverables, meetings, export, theme
 
 
 # Configuration de la page (doit être le premier appel Streamlit)
 st.set_page_config(
     page_title="Gestion de Projet",
-    page_icon="",
+    page_icon="🌸",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# Injection du thème pastel (polices, couleurs douces, coins arrondis)
+theme.inject_css()
 
 
 def ensure_db():
@@ -41,7 +44,21 @@ def select_project():
     Affiche le sélecteur de projet dans la barre latérale et permet d'en créer
     ou d'en supprimer. Retourne l'id du projet sélectionné (ou None).
     """
-    st.sidebar.title("Gestion de Projet")
+    st.sidebar.markdown(
+        """
+        <div style="
+            font-family:'Baloo 2', sans-serif;
+            font-size:1.5rem; font-weight:700;
+            text-align:center; color:#B5519A;
+            padding:8px 0 4px 0;">
+            Mes Projets
+        </div>
+        <div style="text-align:center; color:#9C7BB0; font-size:0.85rem; margin-bottom:8px;">
+            Pilote tes phases en douceur
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     projects = models.get_projects()
 
     # Création d'un nouveau projet
@@ -96,8 +113,10 @@ def main():
     project_id = select_project()
 
     if project_id is None:
-        st.title("Bienvenue")
-        st.write("Créez un projet depuis la barre latérale pour démarrer.")
+        theme.banner(
+            "Bienvenue",
+            "Crée ton premier projet depuis la barre latérale pour commencer.",
+        )
         return
 
     # Navigation principale

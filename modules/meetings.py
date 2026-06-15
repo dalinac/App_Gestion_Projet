@@ -10,14 +10,20 @@ Permet de :
 """
 
 import streamlit as st
-from datetime import date, datetime
+from datetime import date, datetime, time as dtime
 
 from database import models
+from modules import theme
 from utils.helpers import global_progress, parse_date, format_date_fr
+
+# Heure par défaut fixe pour les nouveaux créneaux. On évite volontairement
+# datetime.now().time() comme valeur par défaut d'un time_input : sa valeur
+# changeant à chaque rerun pourrait perturber le widget côté navigateur.
+DEFAULT_TIME = dtime(9, 0)
 
 
 def render(project_id):
-    st.header("Réunions & Communication")
+    theme.banner("Réunions & Communication", "Planifie, prends tes notes et partage les avancées.")
 
     tab_meet, tab_recap = st.tabs(["Réunions & CR", "Récapitulatif automatique"])
     with tab_meet:
@@ -40,7 +46,7 @@ def _render_meetings(project_id):
         with st.form("add_meeting", clear_on_submit=True):
             c1, c2 = st.columns(2)
             mdate = c1.date_input("Date", value=date.today())
-            mtime = c2.time_input("Heure", value=datetime.now().time())
+            mtime = c2.time_input("Heure", value=DEFAULT_TIME)
             subject = st.text_input("Sujet *")
             phase_name = st.selectbox("Phase concernée", list(phase_map.keys()))
             participants = st.text_input("Participants (séparés par des virgules)")
@@ -83,7 +89,7 @@ def _render_meeting_editor(meeting, phase_map, phases):
         try:
             t_default = datetime.strptime(mtime_str, "%H:%M").time()
         except ValueError:
-            t_default = datetime.now().time()
+            t_default = DEFAULT_TIME
         mtime = c2.time_input("Heure", value=t_default, key=f"mt_{meeting['id']}")
 
         subject = st.text_input("Sujet", value=meeting.get("subject") or "", key=f"ms_{meeting['id']}")
@@ -175,7 +181,14 @@ def _render_auto_recap(project_id):
 
     st.divider()
     st.subheader("Récapitulatif généré")
-    st.code(recap, language="markdown")
+    # Zone de texte en lecture : sélectionnable pour un copier/coller facile.
+    # On évite st.code ici : son rendu (highlighter) boucle dans un onglet
+    # initialement masqué et déclenche l'erreur React « Maximum update depth ».
+    st.text_area(
+        "Récapitulatif (sélectionnez puis copiez)",
+        value=recap,
+        height=320,
+    )
     st.download_button(
         "Télécharger le récapitulatif (.txt)",
         data=recap,

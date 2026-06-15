@@ -10,6 +10,7 @@ import streamlit as st
 from datetime import date, timedelta
 
 from database import models
+from modules import theme
 from utils.helpers import (
     task_is_active_this_week, parse_date, format_date_fr, STATUSES,
 )
@@ -17,7 +18,7 @@ from utils.helpers import (
 
 def render(project_id):
     """Affiche la vue Action Rapide pour le projet courant."""
-    st.header("Action Rapide — À faire cette semaine")
+    theme.banner("Action Rapide", "Tes tâches à faire cette semaine, en un coup d'œil.")
 
     today = date.today()
     start_week = today - timedelta(days=today.weekday())

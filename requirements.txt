@@ -1,5 +1,6 @@
 # Dépendances de l'application de gestion de projet
-streamlit>=1.30.0
+# Streamlit >= 1.43 requis pour le paramètre width='stretch'
+streamlit>=1.43.0
 plotly>=5.18.0
 pandas>=2.0.0
 # Export d'images/PDF des graphiques Plotly (optionnel mais recommandé).

@@ -16,6 +16,7 @@ from utils.helpers import (
     global_progress, phase_duration_share, parse_date, format_date_fr,
 )
 from modules.gantt import build_gantt_figure, build_phase_gantt
+from modules import theme
 from datetime import date
 
 
@@ -27,9 +28,7 @@ def render(project_id):
     dependencies = models.get_dependencies(project_id)
     deliverables = models.get_deliverables(project_id)
 
-    st.header(f"Tableau de bord — {project['name']}")
-    if project.get("description"):
-        st.caption(project["description"])
+    theme.banner(f"Tableau de bord — {project['name']}", project.get("description") or "")
 
     # ---- Indicateurs clés (KPI) ----
     g_progress = global_progress(phases)
@@ -53,7 +52,7 @@ def render(project_id):
     highlight = st.checkbox("Mettre en évidence le chemin critique", value=True)
     fig, cp = build_gantt_figure(tasks, dependencies, highlight_critical=highlight)
     if fig:
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
         if cp["critical_ids"]:
             critical_names = [t["name"] for t in tasks if t["id"] in cp["critical_ids"]]
             st.warning(
@@ -82,7 +81,7 @@ def render(project_id):
     st.subheader("Vue macro des phases")
     macro = build_phase_gantt(phases)
     if macro:
-        st.plotly_chart(macro, use_container_width=True)
+        st.plotly_chart(macro, width='stretch')
     else:
         st.info("Aucune phase datée à afficher.")
 
@@ -101,11 +100,12 @@ def _render_phase_pie(phases):
         names=names,
         values=days,
         title="Répartition de la durée du projet",
-        color_discrete_sequence=colors or None,
+        color_discrete_sequence=colors or theme.PASTEL_SEQUENCE,
     )
     fig.update_traces(textposition="inside", textinfo="percent+label")
     fig.update_layout(margin=dict(l=10, r=10, t=40, b=10), height=380)
-    st.plotly_chart(fig, use_container_width=True)
+    theme.style_fig(fig)
+    st.plotly_chart(fig, width='stretch')
 
 
 def _render_phase_progress(phases):

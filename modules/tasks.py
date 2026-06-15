@@ -14,6 +14,7 @@ import streamlit as st
 from datetime import date
 
 from database import models
+from modules import theme
 from utils.helpers import (
     STATUSES, PHASE_PALETTE, parse_date, format_date_fr, phase_progress_from_tasks,
 )
@@ -21,7 +22,7 @@ from utils.helpers import (
 
 def render(project_id):
     """Affiche l'interface de gestion des phases et tâches."""
-    st.header("Gestion des phases & tâches")
+    theme.banner("Phases & Tâches", "Organise tes phases, tâches, versions et dépendances.")
 
     tab_phases, tab_tasks, tab_deps = st.tabs(
         ["Phases", "Tâches", "Dépendances"]

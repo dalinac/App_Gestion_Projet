@@ -13,6 +13,7 @@ import streamlit as st
 from datetime import date
 
 from database import models
+from modules import theme
 from utils.helpers import STATUSES, parse_date, format_date_fr
 
 # Natures de livrables proposées
@@ -21,7 +22,7 @@ NATURES = ["Document", "Prototype", "Code / Logiciel", "Maquette",
 
 
 def render(project_id):
-    st.header("Livrables")
+    theme.banner("Livrables", "Ce que tu dois rendre, à qui et pour quand.")
 
     phases = models.get_phases(project_id)
     if not phases:
@@ -86,7 +87,7 @@ def render(project_id):
             "Destinataire": dl.get("recipient", ""),
             "Statut": dl.get("status", ""),
         })
-    st.dataframe(table_rows, use_container_width=True, hide_index=True)
+    st.dataframe(table_rows, width='stretch', hide_index=True)
 
     st.divider()
 

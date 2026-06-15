@@ -16,13 +16,14 @@ import zipfile
 import streamlit as st
 
 from database import models
+from modules import theme
 from modules.gantt import build_gantt_figure, build_phase_gantt
 from utils.helpers import phase_duration_share
 import plotly.express as px
 
 
 def render(project_id):
-    st.header("Export & Sauvegarde")
+    theme.banner("Export & Sauvegarde", "Récupère tes données et tes graphiques en un clic.")
 
     project = models.get_project(project_id)
 
@@ -51,7 +52,7 @@ def render(project_id):
             file_name=f"{name}.csv",
             mime="text/csv",
             disabled=not data,
-            use_container_width=True,
+            width='stretch',
         )
 
     # Archive ZIP complète
@@ -61,7 +62,7 @@ def render(project_id):
         data=zip_bytes,
         file_name=f"export_{_safe(project['name'])}.zip",
         mime="application/zip",
-        use_container_width=True,
+        width='stretch',
     )
 
     st.divider()
@@ -87,7 +88,7 @@ def render(project_id):
 
     choice = st.selectbox("Choisir la vue à exporter", list(available.keys()))
     fig = available[choice]
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     kaleido_ok = _kaleido_available()
     c1, c2, c3 = st.columns(3)
@@ -97,13 +98,13 @@ def render(project_id):
         c1.download_button(
             "PNG", data=png_bytes,
             file_name=f"{_safe(choice)}.png", mime="image/png",
-            use_container_width=True,
+            width='stretch',
         )
         pdf_bytes = fig.to_image(format="pdf", width=1200, height=600, scale=2)
         c2.download_button(
             "PDF", data=pdf_bytes,
             file_name=f"{_safe(choice)}.pdf", mime="application/pdf",
-            use_container_width=True,
+            width='stretch',
         )
     else:
         st.warning(
@@ -117,7 +118,7 @@ def render(project_id):
     c3.download_button(
         "HTML interactif", data=html_bytes,
         file_name=f"{_safe(choice)}.html", mime="text/html",
-        use_container_width=True,
+        width='stretch',
     )
 
 
@@ -159,8 +160,10 @@ def _build_pie(phases):
         names=[s[0] for s in shares],
         values=[s[1] for s in shares],
         title="Répartition de la durée du projet par phase",
+        color_discrete_sequence=theme.PASTEL_SEQUENCE,
     )
     fig.update_traces(textposition="inside", textinfo="percent+label")
+    theme.style_fig(fig)
     return fig
 
 
