@@ -17,7 +17,7 @@ import streamlit as st
 
 from database import models
 from modules import theme
-from modules.gantt import build_gantt_figure, build_phase_gantt
+from modules.gantt import build_phase_gantt_figure
 from utils.helpers import phase_duration_share
 import plotly.express as px
 
@@ -70,20 +70,18 @@ def render(project_id):
     # ---- Export graphiques ----
     st.subheader("Export des vues analytiques (image / PDF)")
 
-    dependencies = models.get_dependencies(project_id)
-    gantt_fig, _ = build_gantt_figure(tasks, dependencies, highlight_critical=True)
+    phase_deps = models.get_phase_dependencies(project_id)
+    gantt_fig, _ = build_phase_gantt_figure(phases, phase_deps, highlight_critical=True)
     pie_fig = _build_pie(phases)
-    macro_fig = build_phase_gantt(phases)
 
     figures = {
-        "Diagramme de Gantt": gantt_fig,
+        "Diagramme de Gantt des phases": gantt_fig,
         "Répartition des phases (camembert)": pie_fig,
-        "Vue macro des phases": macro_fig,
     }
 
     available = {k: v for k, v in figures.items() if v is not None}
     if not available:
-        st.info("Ajoutez des phases et des tâches datées pour générer les graphiques.")
+        st.info("Ajoutez des phases avec des dates pour générer les graphiques.")
         return
 
     choice = st.selectbox("Choisir la vue à exporter", list(available.keys()))

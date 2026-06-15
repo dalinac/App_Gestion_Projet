@@ -1,13 +1,10 @@
 """
 Application de gestion et de phasage de projet.
 
-Point d'entrée Streamlit. Orchestration de la navigation entre les modules :
-  - Tableau de bord (Gantt, chemin critique, avancement, camembert) ;
-  - Action Rapide (to-do de la semaine) ;
-  - Gestion des phases & tâches (délais, statut, dépendances, versions) ;
-  - Livrables ;
-  - Réunions & Communication (CR, récapitulatif auto) ;
-  - Export & Sauvegarde.
+Point d'entrée Streamlit. Gère :
+  - l'identification par Username (stocké en session) ;
+  - la navigation entre les modules ;
+  - le filtrage de tous les projets par utilisateur connecté.
 
 Lancement : `streamlit run app.py`
 """
@@ -20,15 +17,13 @@ from database import db, models
 from modules import dashboard, todo, tasks, deliverables, meetings, export, theme
 
 
-# Configuration de la page (doit être le premier appel Streamlit)
 st.set_page_config(
     page_title="Gestion de Projet",
-    page_icon="🌸",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Injection du thème pastel (polices, couleurs douces, coins arrondis)
+# Injection du thème (couleurs, polices, coins arrondis)
 theme.inject_css()
 
 
@@ -39,30 +34,59 @@ def ensure_db():
         st.session_state["_db_ready"] = True
 
 
-def select_project():
+def login_screen():
     """
-    Affiche le sélecteur de projet dans la barre latérale et permet d'en créer
-    ou d'en supprimer. Retourne l'id du projet sélectionné (ou None).
+    Écran d'accueil : saisie du Username. Tant qu'aucun nom n'est saisi, le
+    contenu de l'application reste inaccessible. Le nom est conservé en session.
+    """
+    theme.banner(
+        "Bienvenue",
+        "Saisissez votre nom d'utilisateur pour accéder à vos projets.",
+    )
+    with st.form("login", clear_on_submit=False):
+        username = st.text_input("Nom d'utilisateur")
+        submitted = st.form_submit_button("Se connecter")
+        if submitted:
+            if username.strip():
+                st.session_state["username"] = username.strip()
+                st.session_state.pop("current_project", None)
+                st.rerun()
+            else:
+                st.error("Veuillez saisir un nom d'utilisateur.")
+    st.caption(
+        "Chaque utilisateur ne voit et ne modifie que ses propres projets. "
+        "Saisissez le même nom pour retrouver vos projets ultérieurement."
+    )
+
+
+def select_project(username):
+    """
+    Sélecteur de projet (limité aux projets de l'utilisateur connecté) dans la
+    barre latérale. Permet d'en créer ou d'en supprimer. Retourne l'id choisi.
     """
     st.sidebar.markdown(
-        """
+        f"""
         <div style="
             font-family:'Playfair Display', Georgia, serif;
             font-size:1.6rem; font-weight:700;
             text-align:center; color:#8A6D45;
-            padding:8px 0 4px 0;">
+            padding:8px 0 2px 0;">
             Mes Projets
         </div>
         <div style="text-align:center; color:#9C8466; font-size:0.85rem;
-                    font-style:italic; margin-bottom:8px;">
-            Gérez vos phases avec élégance
+                    margin-bottom:8px;">
+            Connecté : <b>{username}</b>
         </div>
         """,
         unsafe_allow_html=True,
     )
-    projects = models.get_projects()
+    if st.sidebar.button("Changer d'utilisateur"):
+        st.session_state.pop("username", None)
+        st.session_state.pop("current_project", None)
+        st.rerun()
 
-    # Création d'un nouveau projet
+    projects = models.get_projects(username)
+
     with st.sidebar.expander("Nouveau projet"):
         with st.form("new_project", clear_on_submit=True):
             name = st.text_input("Nom du projet *")
@@ -75,7 +99,8 @@ def select_project():
                     st.error("Le nom est obligatoire.")
                 else:
                     new_id = models.create_project(
-                        name.strip(), description, start.isoformat(), end.isoformat()
+                        username, name.strip(), description,
+                        start.isoformat(), end.isoformat(),
                     )
                     st.session_state["current_project"] = new_id
                     st.rerun()
@@ -84,7 +109,6 @@ def select_project():
         st.sidebar.info("Aucun projet. Créez-en un pour commencer.")
         return None
 
-    # Sélection du projet courant
     project_ids = [p["id"] for p in projects]
     labels = {p["id"]: p["name"] for p in projects}
     default = st.session_state.get("current_project", project_ids[0])
@@ -92,14 +116,12 @@ def select_project():
         default = project_ids[0]
 
     selected = st.sidebar.selectbox(
-        "Projet actif",
-        project_ids,
+        "Projet actif", project_ids,
         index=project_ids.index(default),
         format_func=lambda i: labels[i],
     )
     st.session_state["current_project"] = selected
 
-    # Suppression du projet
     with st.sidebar.expander("Gérer ce projet"):
         if st.button("Supprimer le projet", type="secondary"):
             models.delete_project(selected)
@@ -111,30 +133,35 @@ def select_project():
 
 def main():
     ensure_db()
-    project_id = select_project()
 
+    # Étape 1 : identification obligatoire
+    username = st.session_state.get("username")
+    if not username:
+        login_screen()
+        return
+
+    # Étape 2 : sélection d'un projet de l'utilisateur
+    project_id = select_project(username)
     if project_id is None:
         theme.banner(
-            "Bienvenue",
+            "Aucun projet",
             "Créez votre premier projet depuis la barre latérale pour commencer.",
         )
         return
 
-    # Navigation principale
+    # Sécurité : on ne charge un projet que s'il appartient à l'utilisateur
+    project = models.get_project(project_id)
+    if not project or project.get("username") != username:
+        st.session_state.pop("current_project", None)
+        st.rerun()
+
     st.sidebar.divider()
     page = st.sidebar.radio(
         "Navigation",
-        [
-            "Tableau de bord",
-            "Action Rapide",
-            "Phases & Tâches",
-            "Livrables",
-            "Réunions",
-            "Export",
-        ],
+        ["Tableau de bord", "Action Rapide", "Phases & Tâches",
+         "Livrables", "Réunions", "Export"],
     )
 
-    # Routage vers le module correspondant
     if page == "Tableau de bord":
         dashboard.render(project_id)
     elif page == "Action Rapide":

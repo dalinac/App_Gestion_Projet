@@ -1,9 +1,8 @@
 """
-Module "Action Rapide" (To-Do List).
+Module "Action Rapide".
 
-Tableau de bord filtré extrayant les tâches "à faire cette semaine" pour la
-gestion opérationnelle au quotidien. Permet de cocher rapidement les tâches
-terminées et de visualiser les retards.
+Vue opérationnelle filtrée : les phases actives cette semaine (et celles en
+retard), avec leurs tâches sous forme de to-do list à cocher.
 """
 
 import streamlit as st
@@ -11,14 +10,11 @@ from datetime import date, timedelta
 
 from database import models
 from modules import theme
-from utils.helpers import (
-    task_is_active_this_week, parse_date, format_date_fr, STATUSES,
-)
+from utils.helpers import phase_is_active_this_week, parse_date, format_date_fr, STATUSES
 
 
 def render(project_id):
-    """Affiche la vue Action Rapide pour le projet courant."""
-    theme.banner("Action Rapide", "Vos tâches de la semaine, en un coup d'œil.")
+    theme.banner("Action Rapide", "Vos phases de la semaine et leurs tâches, en un coup d'œil.")
 
     today = date.today()
     start_week = today - timedelta(days=today.weekday())
@@ -27,77 +23,62 @@ def render(project_id):
         f"Semaine du {start_week.strftime('%d/%m/%Y')} au {end_week.strftime('%d/%m/%Y')}"
     )
 
-    tasks = models.get_tasks(project_id=project_id)
-
-    # Tâches de la semaine (chevauchant la semaine courante, non terminées)
-    week_tasks = [t for t in tasks if task_is_active_this_week(t)]
-    # Tâches en retard (fin dépassée, non terminées)
-    late_tasks = [
-        t for t in tasks
-        if parse_date(t.get("end_date")) and parse_date(t["end_date"]) < today
-        and t.get("status") != "Terminé"
+    phases = models.get_phases(project_id)
+    week_phases = [p for p in phases if phase_is_active_this_week(p)]
+    late_phases = [
+        p for p in phases
+        if parse_date(p.get("end_date")) and parse_date(p["end_date"]) < today
+        and p.get("status") != "Terminé"
     ]
 
     col1, col2 = st.columns(2)
-    col1.metric("À faire cette semaine", len(week_tasks))
-    col2.metric("En retard", len(late_tasks), delta_color="inverse")
+    col1.metric("Phases actives cette semaine", len(week_phases))
+    col2.metric("Phases en retard", len(late_phases), delta_color="inverse")
 
     st.divider()
 
-    # ---- Tâches en retard (prioritaires) ----
-    if late_tasks:
-        st.subheader("Tâches en retard")
-        for t in late_tasks:
-            _render_task_row(t, overdue=True)
+    if late_phases:
+        st.subheader("Phases en retard")
+        for p in late_phases:
+            _render_phase_block(p, late=True)
         st.divider()
 
-    # ---- Tâches de la semaine ----
-    st.subheader("Tâches de la semaine")
-    if not week_tasks:
-        st.success("Aucune tâche à traiter cette semaine.")
+    st.subheader("Phases de la semaine")
+    if not week_phases:
+        st.success("Aucune phase active cette semaine.")
         return
+    for p in week_phases:
+        _render_phase_block(p)
 
-    for t in week_tasks:
-        _render_task_row(t)
 
-
-def _render_task_row(task, overdue=False):
-    """Affiche une ligne de tâche avec case de complétion et changement de statut."""
-    cols = st.columns([0.06, 0.44, 0.2, 0.3])
-
-    # Case à cocher : marque la tâche comme terminée
-    done = task.get("status") == "Terminé"
-    checked = cols[0].checkbox(
-        "Terminé",
-        value=done,
-        key=f"todo_done_{task['id']}",
-        label_visibility="collapsed",
+def _render_phase_block(phase, late=False):
+    """Affiche une phase (statut rapide) et ses tâches cochables."""
+    suffix = "  ·  en retard" if late else ""
+    header = (
+        f"**{phase['name']}**  ·  {phase.get('version', '')}  ·  "
+        f"échéance {format_date_fr(phase.get('end_date'))}{suffix}"
     )
-    if checked and not done:
-        models.update_task(task["id"], status="Terminé", progress=100)
-        st.rerun()
-    elif not checked and done:
-        models.update_task(task["id"], status="En cours")
-        st.rerun()
+    st.markdown(header)
 
-    # Nom + phase
-    phase = task.get("phase_name", "")
-    cols[1].markdown(f"**{task['name']}**  \n_{phase}_")
-
-    # Échéance + responsable
-    cols[2].write(f"{format_date_fr(task.get('end_date'))}")
-    cols[2].caption(f"{task.get('assignee') or '—'}")
-
-    # Statut rapide
-    current = task.get("status", "À faire")
-    new_status = cols[3].selectbox(
-        "Statut",
-        STATUSES,
+    # Changement de statut rapide de la phase
+    current = phase.get("status", "À faire")
+    new_status = st.selectbox(
+        "Statut de la phase", STATUSES,
         index=STATUSES.index(current) if current in STATUSES else 0,
-        key=f"todo_status_{task['id']}",
-        label_visibility="collapsed",
+        key=f"ar_status_{phase['id']}",
     )
     if new_status != current:
-        progress = 100 if new_status == "Terminé" else task.get("progress", 0)
-        models.update_task(task["id"], status=new_status, progress=progress)
+        models.update_phase(phase["id"], status=new_status)
         st.rerun()
+
+    # Tâches de la phase (to-do list)
+    tasks = models.get_tasks(phase_id=phase["id"])
+    if not tasks:
+        st.caption("Aucune tâche dans cette phase.")
+    for t in tasks:
+        done = t.get("status") == "Terminé"
+        checked = st.checkbox(t["name"], value=done, key=f"ar_task_{t['id']}")
+        if checked != done:
+            models.set_task_status(t["id"], "Terminé" if checked else "À faire")
+            st.rerun()
+    st.divider()
