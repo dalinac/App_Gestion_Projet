@@ -92,4 +92,14 @@ def build_phase_gantt_figure(phases, phase_deps, highlight_critical=True):
         margin=dict(l=10, r=10, t=60, b=10),
     )
     theme.style_fig(fig)
+
+    # Grille : contour (mirror) + lignes intérieures, en tons doux
+    fig.update_xaxes(
+        showgrid=True, gridcolor="#E0D4BF", gridwidth=1,
+        showline=True, linecolor="#C7B393", linewidth=1, mirror=True,
+    )
+    fig.update_yaxes(
+        showgrid=True, gridcolor="#E0D4BF", gridwidth=1,
+        showline=True, linecolor="#C7B393", linewidth=1, mirror=True,
+    )
     return fig, cp

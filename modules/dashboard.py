@@ -9,6 +9,8 @@ Regroupe :
   - l'indicateur de Santé du Projet (avancement vs temps écoulé).
 """
 
+import html
+
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
@@ -16,6 +18,7 @@ import plotly.graph_objects as go
 from database import models
 from utils.helpers import (
     global_progress, phase_duration_share, parse_date, project_health,
+    format_date_fr,
 )
 from modules.gantt import build_phase_gantt_figure
 from modules import theme
@@ -84,6 +87,24 @@ def render(project_id):
     # ---- Santé du projet (remplace l'ancienne vue macro) ----
     st.subheader("Santé du projet")
     _render_health(health)
+
+    st.divider()
+
+    # ---- Tâches du projet (code couleur terminé / à faire) ----
+    st.subheader("Tâches du projet")
+    _render_tasks_overview(project_id)
+
+    st.divider()
+
+    # ---- Livrables à rendre (rendu et validé ou non) ----
+    st.subheader("Livrables à rendre")
+    _render_deliverables_overview(deliverables)
+
+    st.divider()
+
+    # ---- Réunions (cliquer pour afficher le compte rendu) ----
+    st.subheader("Réunions")
+    _render_meetings_overview(project_id)
 
 
 def _render_phase_pie(phases):
@@ -194,3 +215,112 @@ def _render_health(health):
             "Si l'avancement le dépasse, le projet est en avance ; en dessous, "
             "il est en retard."
         )
+
+
+def _render_tasks_overview(project_id):
+    """
+    Tâches du projet groupées par phase, avec code couleur :
+    vert = terminée, ocre/brun = à faire.
+    """
+    tasks = models.get_tasks(project_id=project_id)
+    if not tasks:
+        st.info("Aucune tâche pour le moment. Ajoutez-en depuis « Phases & Tâches ».")
+        return
+
+    st.markdown(
+        "<span style='background:#7FA86B;color:#fff;border-radius:8px;"
+        "padding:2px 9px;font-size:0.8rem;'>Terminée</span>&nbsp;&nbsp;"
+        "<span style='background:#C08457;color:#fff;border-radius:8px;"
+        "padding:2px 9px;font-size:0.8rem;'>À faire</span>",
+        unsafe_allow_html=True,
+    )
+
+    by_phase = {}
+    for t in tasks:
+        by_phase.setdefault(t.get("phase_name", "—"), []).append(t)
+
+    for phase_name, items in by_phase.items():
+        chips = ""
+        for t in items:
+            done = t.get("status") == "Terminé"
+            color = "#7FA86B" if done else "#C08457"
+            chips += (
+                f"<span style='background:{color};color:#fff;border-radius:10px;"
+                f"padding:4px 12px;margin:3px;display:inline-block;font-size:0.9rem;'>"
+                f"{html.escape(t['name'])}</span>"
+            )
+        st.markdown(f"**{html.escape(phase_name)}**")
+        st.markdown(f"<div>{chips}</div>", unsafe_allow_html=True)
+
+
+def _render_deliverables_overview(deliverables):
+    """Livrables : date limite, destinataire et état (rendu et validé ou non)."""
+    if not deliverables:
+        st.info("Aucun livrable défini. Ajoutez-en depuis « Livrables ».")
+        return
+
+    today = date.today()
+    rows = []
+    for dl in deliverables:
+        status = dl.get("status", "À faire")
+        overdue = (
+            parse_date(dl.get("due_date")) and parse_date(dl["due_date"]) < today
+            and status != "Terminé"
+        )
+        if status == "Terminé":
+            label, color = "Rendu et validé", "#7FA86B"
+        elif overdue:
+            label, color = "En retard", "#B5654A"
+        elif status in ("En cours", "En attente"):
+            label, color = status, "#C9A66B"
+        else:
+            label, color = "À rendre", "#B9A48B"
+        badge = (
+            f"<span style='background:{color};color:#fff;border-radius:10px;"
+            f"padding:3px 10px;font-size:0.85rem;'>{label}</span>"
+        )
+        rows.append(
+            "<tr>"
+            f"<td style='padding:6px 10px;'>{html.escape(dl['name'])}</td>"
+            f"<td style='padding:6px 10px;color:#8A7355;'>{html.escape(dl.get('phase_name') or '')}</td>"
+            f"<td style='padding:6px 10px;'>{format_date_fr(dl.get('due_date'))}</td>"
+            f"<td style='padding:6px 10px;color:#8A7355;'>{html.escape(dl.get('recipient') or '—')}</td>"
+            f"<td style='padding:6px 10px;'>{badge}</td>"
+            "</tr>"
+        )
+
+    table = (
+        "<table style='width:100%;border-collapse:collapse;'>"
+        "<thead><tr style='text-align:left;color:#5C4A38;border-bottom:1px solid #E0D4BF;'>"
+        "<th style='padding:6px 10px;'>Livrable</th>"
+        "<th style='padding:6px 10px;'>Phase</th>"
+        "<th style='padding:6px 10px;'>Date limite</th>"
+        "<th style='padding:6px 10px;'>Destinataire</th>"
+        "<th style='padding:6px 10px;'>État</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+    )
+    st.markdown(table, unsafe_allow_html=True)
+
+
+def _render_meetings_overview(project_id):
+    """Réunions cliquables : ouvrir une réunion affiche son compte rendu."""
+    meetings = models.get_meetings(project_id)
+    if not meetings:
+        st.info("Aucune réunion planifiée. Ajoutez-en depuis « Réunions ».")
+        return
+    for m in meetings:
+        title = (
+            f"{format_date_fr(m.get('date'))}  {m.get('time', '')}  —  "
+            f"{m.get('subject', '')}"
+        )
+        with st.expander(title):
+            if m.get("phase_name"):
+                st.caption(f"Phase concernée : {m['phase_name']}")
+            if m.get("participants"):
+                st.caption(f"Participants : {m['participants']}")
+            report = m.get("report")
+            if report and report.strip():
+                st.markdown("**Compte rendu**")
+                st.write(report)
+            else:
+                st.caption("Aucun compte rendu saisi pour cette réunion.")
