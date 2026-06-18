@@ -23,6 +23,7 @@ import os
 from contextlib import contextmanager
 
 from sqlalchemy import create_engine, text, event
+from sqlalchemy.engine import URL
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
@@ -32,8 +33,40 @@ _ENGINE = None
 IS_POSTGRES = False
 
 
+def _structured_pg_url():
+    """
+    Construit une URL PostgreSQL à partir d'un secret structuré ``[postgres]``
+    (champs séparés). Cette forme évite tout problème d'encodage de mot de passe
+    contenant des caractères spéciaux (@ : / # ? ...).
+
+    Format attendu dans les secrets Streamlit :
+        [postgres]
+        host = "aws-0-....pooler.supabase.com"
+        port = 5432
+        user = "postgres.xxxxxxxx"
+        password = "votre_mot_de_passe"
+        dbname = "postgres"
+    """
+    try:
+        import streamlit as st
+        if "postgres" not in st.secrets:
+            return None
+        s = st.secrets["postgres"]
+        return URL.create(
+            "postgresql+psycopg2",
+            username=s.get("user", "postgres"),
+            password=s.get("password"),
+            host=s["host"],
+            port=int(s.get("port", 5432)),
+            database=s.get("dbname", "postgres"),
+            query={"sslmode": s.get("sslmode", "require")},
+        )
+    except Exception:
+        return None
+
+
 def _database_url():
-    """URL de connexion distante si configurée (env var puis st.secrets), sinon None."""
+    """URL de connexion fournie sous forme de chaîne (env var puis st.secrets)."""
     url = os.environ.get("DATABASE_URL")
     if not url:
         try:
@@ -50,17 +83,23 @@ def get_engine():
     if _ENGINE is not None:
         return _ENGINE
 
-    url = _database_url()
-    if url:
+    structured = _structured_pg_url()
+    raw_url = _database_url()
+
+    if structured is not None:
+        # Secret structuré [postgres] : URL déjà construite proprement (ssl inclus)
+        IS_POSTGRES = True
+        _ENGINE = create_engine(structured, pool_pre_ping=True, pool_recycle=300)
+    elif raw_url:
+        # Chaîne DATABASE_URL : on normalise le préfixe et on impose le SSL
+        url = raw_url
         if url.startswith("postgres://"):
             url = "postgresql+psycopg2://" + url[len("postgres://"):]
         elif url.startswith("postgresql://"):
             url = "postgresql+psycopg2://" + url[len("postgresql://"):]
-
         connect_args = {}
         if "sslmode" not in url:
             connect_args["sslmode"] = "require"
-
         IS_POSTGRES = True
         _ENGINE = create_engine(
             url, pool_pre_ping=True, pool_recycle=300, connect_args=connect_args,

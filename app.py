@@ -28,10 +28,30 @@ theme.inject_css()
 
 
 def ensure_db():
-    """Initialise la base de données une seule fois par session."""
-    if not st.session_state.get("_db_ready"):
+    """
+    Initialise la base de données une seule fois par session. En cas d'échec de
+    connexion à PostgreSQL, affiche un message clair et actionnable plutôt que
+    de laisser remonter une erreur technique redacted.
+    """
+    if st.session_state.get("_db_ready"):
+        return
+    try:
         init_db(seed=True)
         st.session_state["_db_ready"] = True
+    except Exception as exc:
+        st.error(
+            "Impossible de se connecter à la base de données PostgreSQL.\n\n"
+            "Causes les plus fréquentes (Streamlit Cloud + Supabase) :\n"
+            "- utiliser l'URL **directe** (`db.xxxx.supabase.co`) au lieu du "
+            "**Session pooler** (`...pooler.supabase.com`) : Streamlit Cloud exige l'IPv4 ;\n"
+            "- un **mot de passe contenant des caractères spéciaux** : préférez le "
+            "format de secret par champs séparés `[postgres]` (voir le README) ;\n"
+            "- le marqueur `[YOUR-PASSWORD]` non remplacé, un mauvais port "
+            "(Session pooler = 5432) ou un mot de passe erroné."
+        )
+        with st.expander("Détail technique de l'erreur"):
+            st.code(f"{type(exc).__name__}: {exc}")
+        st.stop()
 
 
 def storage_is_persistent():

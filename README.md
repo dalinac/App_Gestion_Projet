@@ -149,30 +149,38 @@ passer de l'un à l'autre.
    (notez-le, il sert à l'étape 2).
 3. Attendez environ une minute que la base soit prête.
 
-### Étape 2 - Récupérer l'URL de connexion (Session pooler)
+### Étape 2 - Récupérer les informations de connexion (Session pooler)
 1. Dans le projet Supabase : bouton Connect (en haut) puis onglet Connection string.
-2. Choisissez Session pooler (important : compatible avec Streamlit Cloud qui ne
-   supporte que l'IPv4) et copiez l'URI. Elle ressemble à :
-   ```
-   postgresql://postgres.abcdefgh:[email protected]:5432/postgres
-   ```
-3. Remplacez `[YOUR-PASSWORD]` par le mot de passe défini à l'étape 1.
+2. Choisissez **Session pooler** (important : compatible avec Streamlit Cloud qui ne
+   supporte que l'IPv4 ; n'utilisez pas la connexion directe `db.xxxx.supabase.co`).
+3. Notez l'hôte (`...pooler.supabase.com`), le port (`5432`), l'utilisateur
+   (`postgres.xxxxxxxx`) et votre mot de passe.
 
 ### Étape 3 - Déclarer le secret sur Streamlit Community Cloud
 1. Déployez l'application depuis https://share.streamlit.io (connecté à ce dépôt GitHub,
    fichier principal `app.py`).
 2. Ouvrez le menu de l'application (trois points) puis Settings puis Secrets
    (ou « Manage app » puis onglet Secrets).
-3. Collez exactement cette ligne (avec votre URL), puis Save :
+3. Collez ces lignes (format recommandé par champs séparés), puis Save :
    ```toml
-   DATABASE_URL = "postgresql://postgres.abcdefgh:[email protected]:5432/postgres"
+   [postgres]
+   host = "aws-0-eu-central-1.pooler.supabase.com"
+   port = 5432
+   user = "postgres.xxxxxxxxxxxx"
+   password = "votre_mot_de_passe"
+   dbname = "postgres"
+   ```
+   Ce format évite les erreurs de connexion lorsque le mot de passe contient des
+   caractères spéciaux (`@ : / # ? ...`). Alternative en une ligne :
+   ```toml
+   DATABASE_URL = "postgresql://postgres.xxxxxxxxxxxx:[email protected]:5432/postgres"
    ```
 4. L'application redémarre seule : elle crée les tables automatiquement et passe en mode
    persistant. La barre latérale affiche alors « Stockage : PostgreSQL (persistant) ».
 
 Test en local de la base en ligne (facultatif) : copiez `.streamlit/secrets.toml.example`
-en `.streamlit/secrets.toml` et collez-y la même ligne `DATABASE_URL`. Ce fichier est
-ignoré par Git (jamais publié). Sans ce fichier, l'application reste sur SQLite local.
+en `.streamlit/secrets.toml` et renseignez vos identifiants. Ce fichier est ignoré par
+Git (jamais publié). Sans ce fichier, l'application reste sur SQLite local.
 
 ---
 
