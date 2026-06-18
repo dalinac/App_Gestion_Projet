@@ -1,5 +1,6 @@
-# Base de données locale (générée au lancement)
+# Stockage local (généré au lancement)
 data/*.db
+data/*.json
 
 # Python
 __pycache__/

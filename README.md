@@ -5,7 +5,8 @@
 Application web complète pour **piloter l'avancement d'un projet**, **anticiper les blocages**
 (chemin critique) et **centraliser la communication** autour des livrables et des réunions.
 
-Construite avec **Python, Streamlit, Plotly et SQLAlchemy** (SQLite en local, PostgreSQL/Supabase en ligne).
+Construite avec **Python, Streamlit et Plotly**. Les données sont stockées dans un
+**document JSON** persisté sur un **gist GitHub** en ligne (fichier local en développement).
 
 ---
 
@@ -73,8 +74,8 @@ streamlit run app.py
 ```
 
 L'application s'ouvre dans le navigateur (par défaut http://localhost:8501). En local,
-sans configuration, elle utilise une base SQLite et crée un projet de démonstration
-(accessible avec le nom d'utilisateur `demo`).
+sans configuration, elle utilise un fichier JSON local (`data/gestion_projet.json`) et
+crée un projet de démonstration (accessible avec le nom d'utilisateur `demo`).
 
 ---
 
@@ -89,9 +90,9 @@ App_Gestion_Projet/
 ├── README.md
 ├── .streamlit/
 │   ├── config.toml           # Thème et configuration serveur
-│   └── secrets.toml.example  # Modèle de secret DATABASE_URL (jamais versionné)
+│   └── secrets.toml.example  # Modèle de secret [github] (jamais versionné)
 ├── database/
-│   ├── db.py                 # Moteur SQLAlchemy (SQLite/PostgreSQL), schéma, démo
+│   ├── db.py                 # Stockage document JSON (gist GitHub / fichier local), démo
 │   └── models.py             # CRUD (projets, phases, tâches, dépendances, livrables, réunions)
 ├── modules/
 │   ├── dashboard.py          # Tableau de bord (Gantt, camembert, santé du projet)
@@ -105,7 +106,7 @@ App_Gestion_Projet/
 ├── utils/
 │   ├── critical_path.py      # Calcul du chemin critique (CPM)
 │   └── helpers.py            # Avancements, dates, santé du projet, constantes
-└── data/                     # Base SQLite locale (générée au lancement, non versionnée)
+└── data/                     # Document JSON local (généré au lancement, non versionné)
 ```
 
 ---
@@ -124,63 +125,58 @@ Aucune dépendance externe n'est requise pour ce calcul.
 
 ## Stockage des données (local et persistant en ligne)
 
-L'application utilise deux moteurs de base de données, choisis automatiquement :
+L'application utilise deux backends de stockage, choisis automatiquement :
 
-| Contexte | Moteur utilisé | Persistance |
-|----------|----------------|-------------|
-| En local (aucune configuration) | SQLite (`data/gestion_projet.db`) | fichier local |
-| Avec un secret `DATABASE_URL` | PostgreSQL (ex. Supabase) | permanente |
+| Contexte | Backend utilisé | Persistance |
+|----------|-----------------|-------------|
+| En local (aucune configuration) | Fichier JSON (`data/gestion_projet.json`) | fichier local |
+| Avec des secrets `[github]` (token + gist_id) | Document JSON dans un gist GitHub | permanente |
 
 Important pour Streamlit Community Cloud : le système de fichiers y est éphémère. Sans
-base externe, un fichier SQLite serait effacé à chaque redémarrage du serveur. Il faut
-donc brancher une base PostgreSQL gratuite (Supabase) ; voir la section suivante.
+stockage externe, le fichier JSON local serait effacé à chaque redémarrage du serveur. Il
+faut donc brancher un **gist GitHub** (gratuit) ; voir la section suivante.
 
-Le code détecte la présence du secret `DATABASE_URL` : s'il existe, il se connecte à
-PostgreSQL ; sinon il retombe sur SQLite. Aucun changement de code n'est nécessaire pour
-passer de l'un à l'autre.
+Le code détecte la présence des secrets `[github]` : s'ils existent, il lit/écrit les
+données dans le gist ; sinon il retombe sur le fichier JSON local. Aucun changement de
+code n'est nécessaire pour passer de l'un à l'autre. Toutes les données (projets, phases,
+tâches, dépendances, livrables, réunions) tiennent dans un unique document JSON.
 
 ---
 
-## Déploiement persistant : Streamlit Cloud et Supabase (pas à pas)
+## Déploiement persistant : Streamlit Cloud et GitHub Gist (pas à pas)
 
-### Étape 1 - Créer une base PostgreSQL gratuite sur Supabase
-1. Créez un compte sur https://supabase.com (gratuit) puis cliquez sur New project.
-2. Donnez un nom, choisissez une région proche, et définissez un Database Password
-   (notez-le, il sert à l'étape 2).
-3. Attendez environ une minute que la base soit prête.
+### Étape 1 - Créer un gist privé
+1. Allez sur https://gist.github.com (connecté à votre compte GitHub).
+2. Créez un fichier nommé **`gestion_projet.json`** dont le contenu est exactement : `{}`
+3. Cliquez sur **Create secret gist** (gist privé, non listé publiquement).
+4. L'identifiant du gist (`gist_id`) est la dernière partie de son URL :
+   `https://gist.github.com/<votre-user>/<gist_id>`.
 
-### Étape 2 - Récupérer les informations de connexion (Session pooler)
-1. Dans le projet Supabase : bouton Connect (en haut) puis onglet Connection string.
-2. Choisissez **Session pooler** (important : compatible avec Streamlit Cloud qui ne
-   supporte que l'IPv4 ; n'utilisez pas la connexion directe `db.xxxx.supabase.co`).
-3. Notez l'hôte (`...pooler.supabase.com`), le port (`5432`), l'utilisateur
-   (`postgres.xxxxxxxx`) et votre mot de passe.
+### Étape 2 - Créer un token GitHub avec la portée « gist »
+- Token classique : https://github.com/settings/tokens > **Generate new token** >
+  cochez la case **`gist`**. Copiez le token généré (`ghp_...`).
+- Ou token « fine-grained » : autorisez l'accès **Gists** en lecture/écriture.
 
-### Étape 3 - Déclarer le secret sur Streamlit Community Cloud
+> Le token ne donne accès qu'aux gists ; il ne permet pas d'agir sur vos dépôts si vous
+> ne cochez que la portée `gist`.
+
+### Étape 3 - Déclarer les secrets sur Streamlit Community Cloud
 1. Déployez l'application depuis https://share.streamlit.io (connecté à ce dépôt GitHub,
    fichier principal `app.py`).
 2. Ouvrez le menu de l'application (trois points) puis Settings puis Secrets
    (ou « Manage app » puis onglet Secrets).
-3. Collez ces lignes (format recommandé par champs séparés), puis Save :
+3. Collez ces lignes, puis Save :
    ```toml
-   [postgres]
-   host = "aws-0-eu-central-1.pooler.supabase.com"
-   port = 5432
-   user = "postgres.xxxxxxxxxxxx"
-   password = "votre_mot_de_passe"
-   dbname = "postgres"
+   [github]
+   token = "ghp_votre_token_personnel"
+   gist_id = "abcdef0123456789abcdef0123456789"
    ```
-   Ce format évite les erreurs de connexion lorsque le mot de passe contient des
-   caractères spéciaux (`@ : / # ? ...`). Alternative en une ligne :
-   ```toml
-   DATABASE_URL = "postgresql://postgres.xxxxxxxxxxxx:[email protected]:5432/postgres"
-   ```
-4. L'application redémarre seule : elle crée les tables automatiquement et passe en mode
-   persistant. La barre latérale affiche alors « Stockage : PostgreSQL (persistant) ».
+4. L'application redémarre seule : elle écrit la démo dans le gist et passe en mode
+   persistant. La barre latérale affiche alors « Stockage : GitHub Gist (persistant) ».
 
-Test en local de la base en ligne (facultatif) : copiez `.streamlit/secrets.toml.example`
-en `.streamlit/secrets.toml` et renseignez vos identifiants. Ce fichier est ignoré par
-Git (jamais publié). Sans ce fichier, l'application reste sur SQLite local.
+Test en local du stockage gist (facultatif) : copiez `.streamlit/secrets.toml.example`
+en `.streamlit/secrets.toml` et renseignez `token` et `gist_id`. Ce fichier est ignoré
+par Git (jamais publié). Sans ce fichier, l'application reste sur le fichier JSON local.
 
 ---
 

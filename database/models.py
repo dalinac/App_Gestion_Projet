@@ -1,5 +1,11 @@
 """
-Couche d'accès aux données (CRUD) au-dessus de SQLAlchemy.
+Couche d'accès aux données (CRUD) au-dessus du document JSON (``database.db``).
+
+L'API publique est strictement identique à la version SQL précédente : les
+modules de l'application n'ont pas à changer. Les fonctions renvoient des copies
+des enregistrements (dictionnaires) afin que l'état interne ne soit jamais muté
+par accident, et reproduisent les enrichissements attendus (``phase_name``,
+``phase_color``) ainsi que les tris.
 
 Portée par utilisateur : les projets sont rattachés à un ``username`` et ne sont
 lisibles/modifiables que par leur propriétaire. La hiérarchie est centrée sur les
@@ -7,17 +13,16 @@ phases (qui portent les dates et les dépendances) ; les tâches sont de simples
 éléments cochables appartenant à une phase.
 """
 
-from sqlalchemy import text
-
-from database.db import db_session, rows_to_dicts, row_to_dict
+from database import db
 
 
-def _build_set_clause(fields, allowed):
-    sets = {k: v for k, v in fields.items() if k in allowed}
-    if not sets:
-        return None, None
-    clause = ", ".join(f"{k}=:{k}" for k in sets)
-    return clause, sets
+def _clone(row):
+    return dict(row) if row else None
+
+
+def _phase_index(data):
+    """Index id -> phase (pour les enrichissements)."""
+    return {p["id"]: p for p in data["phases"]}
 
 
 # ===========================================================================
@@ -25,46 +30,51 @@ def _build_set_clause(fields, allowed):
 # ===========================================================================
 
 def get_projects(username):
-    with db_session() as conn:
-        res = conn.execute(
-            text("""SELECT * FROM projects WHERE username=:u
-                    ORDER BY created_at DESC, id DESC"""),
-            {"u": username},
-        )
-        return rows_to_dicts(res)
+    data = db.get_data()
+    rows = [p for p in data["projects"] if p.get("username") == username]
+    rows.sort(key=lambda p: p["id"], reverse=True)
+    return [_clone(p) for p in rows]
 
 
 def get_project(project_id):
-    with db_session() as conn:
-        res = conn.execute(text("SELECT * FROM projects WHERE id=:id"), {"id": project_id})
-        return row_to_dict(res)
+    data = db.get_data()
+    for p in data["projects"]:
+        if p["id"] == project_id:
+            return _clone(p)
+    return None
 
 
 def create_project(username, name, description, start_date, end_date):
-    with db_session() as conn:
-        return conn.execute(
-            text("""INSERT INTO projects (username, name, description, start_date, end_date)
-                    VALUES (:u, :name, :description, :start_date, :end_date) RETURNING id"""),
-            {"u": username, "name": name, "description": description,
-             "start_date": start_date, "end_date": end_date},
-        ).scalar()
+    new_id = db.next_id()
+    with db.transaction() as data:
+        data["projects"].append({
+            "id": new_id, "username": username, "name": name,
+            "description": description, "start_date": start_date, "end_date": end_date,
+        })
+    return new_id
 
 
 def update_project(project_id, name, description, start_date, end_date):
-    with db_session() as conn:
-        conn.execute(
-            text("""UPDATE projects
-                    SET name=:name, description=:description,
-                        start_date=:start_date, end_date=:end_date
-                    WHERE id=:id"""),
-            {"name": name, "description": description, "start_date": start_date,
-             "end_date": end_date, "id": project_id},
-        )
+    with db.transaction() as data:
+        for p in data["projects"]:
+            if p["id"] == project_id:
+                p.update(name=name, description=description,
+                         start_date=start_date, end_date=end_date)
+                break
 
 
 def delete_project(project_id):
-    with db_session() as conn:
-        conn.execute(text("DELETE FROM projects WHERE id=:id"), {"id": project_id})
+    with db.transaction() as data:
+        phase_ids = {ph["id"] for ph in data["phases"] if ph["project_id"] == project_id}
+        data["projects"] = [p for p in data["projects"] if p["id"] != project_id]
+        data["phases"] = [ph for ph in data["phases"] if ph["project_id"] != project_id]
+        data["tasks"] = [t for t in data["tasks"] if t["phase_id"] not in phase_ids]
+        data["deliverables"] = [d for d in data["deliverables"] if d["phase_id"] not in phase_ids]
+        data["phase_dependencies"] = [
+            d for d in data["phase_dependencies"]
+            if d["phase_id"] not in phase_ids and d["depends_on_phase_id"] not in phase_ids
+        ]
+        data["meetings"] = [m for m in data["meetings"] if m["project_id"] != project_id]
 
 
 # ===========================================================================
@@ -72,60 +82,67 @@ def delete_project(project_id):
 # ===========================================================================
 
 def get_phases(project_id):
-    with db_session() as conn:
-        res = conn.execute(
-            text("SELECT * FROM phases WHERE project_id=:p ORDER BY order_index, id"),
-            {"p": project_id},
-        )
-        return rows_to_dicts(res)
+    data = db.get_data()
+    rows = [p for p in data["phases"] if p["project_id"] == project_id]
+    rows.sort(key=lambda p: (p.get("order_index", 0), p["id"]))
+    return [_clone(p) for p in rows]
 
 
 def get_phase(phase_id):
-    with db_session() as conn:
-        res = conn.execute(text("SELECT * FROM phases WHERE id=:id"), {"id": phase_id})
-        return row_to_dict(res)
+    data = db.get_data()
+    for p in data["phases"]:
+        if p["id"] == phase_id:
+            return _clone(p)
+    return None
 
 
 def create_phase(project_id, name, description, start_date, end_date,
                  status="À faire", progress=0, version="V1", color="#C9A66B",
                  order_index=0, comments=""):
-    with db_session() as conn:
-        return conn.execute(
-            text("""INSERT INTO phases
-                    (project_id, name, description, start_date, end_date, status,
-                     progress, version, color, order_index, comments)
-                    VALUES (:project_id, :name, :description, :start_date, :end_date,
-                            :status, :progress, :version, :color, :order_index, :comments)
-                    RETURNING id"""),
-            {"project_id": project_id, "name": name, "description": description,
-             "start_date": start_date, "end_date": end_date, "status": status,
-             "progress": progress, "version": version, "color": color,
-             "order_index": order_index, "comments": comments},
-        ).scalar()
+    new_id = db.next_id()
+    with db.transaction() as data:
+        data["phases"].append({
+            "id": new_id, "project_id": project_id, "name": name,
+            "description": description, "start_date": start_date, "end_date": end_date,
+            "status": status, "progress": progress, "version": version, "color": color,
+            "order_index": order_index, "comments": comments,
+        })
+    return new_id
 
 
 def update_phase(phase_id, **fields):
     allowed = {"name", "description", "start_date", "end_date", "status",
                "progress", "version", "color", "order_index", "comments"}
-    clause, params = _build_set_clause(fields, allowed)
-    if not clause:
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
         return
-    params["id"] = phase_id
-    with db_session() as conn:
-        conn.execute(text(f"UPDATE phases SET {clause} WHERE id=:id"), params)
+    with db.transaction() as data:
+        for p in data["phases"]:
+            if p["id"] == phase_id:
+                p.update(updates)
+                break
 
 
 def update_phase_progress(phase_id, progress):
-    with db_session() as conn:
-        conn.execute(
-            text("UPDATE phases SET progress=:pr WHERE id=:id"),
-            {"pr": progress, "id": phase_id},
-        )
+    with db.transaction() as data:
+        for p in data["phases"]:
+            if p["id"] == phase_id:
+                p["progress"] = progress
+                break
 
 
 def delete_phase(phase_id):
-    with db_session() as conn:
-        conn.execute(text("DELETE FROM phases WHERE id=:id"), {"id": phase_id})
+    with db.transaction() as data:
+        data["phases"] = [p for p in data["phases"] if p["id"] != phase_id]
+        data["tasks"] = [t for t in data["tasks"] if t["phase_id"] != phase_id]
+        data["deliverables"] = [d for d in data["deliverables"] if d["phase_id"] != phase_id]
+        data["phase_dependencies"] = [
+            d for d in data["phase_dependencies"]
+            if d["phase_id"] != phase_id and d["depends_on_phase_id"] != phase_id
+        ]
+        for m in data["meetings"]:
+            if m.get("phase_id") == phase_id:
+                m["phase_id"] = None
 
 
 # ===========================================================================
@@ -133,51 +150,57 @@ def delete_phase(phase_id):
 # ===========================================================================
 
 def get_tasks(phase_id=None, project_id=None):
-    with db_session() as conn:
-        if phase_id is not None:
-            res = conn.execute(
-                text("SELECT * FROM tasks WHERE phase_id=:p ORDER BY order_index, id"),
-                {"p": phase_id},
-            )
-        elif project_id is not None:
-            res = conn.execute(
-                text("""SELECT t.*, p.name AS phase_name, p.color AS phase_color
-                        FROM tasks t
-                        JOIN phases p ON t.phase_id = p.id
-                        WHERE p.project_id=:p
-                        ORDER BY t.order_index, t.id"""),
-                {"p": project_id},
-            )
-        else:
-            res = conn.execute(text("SELECT * FROM tasks ORDER BY order_index, id"))
-        return rows_to_dicts(res)
+    data = db.get_data()
+    if phase_id is not None:
+        rows = [t for t in data["tasks"] if t["phase_id"] == phase_id]
+        rows.sort(key=lambda t: (t.get("order_index", 0), t["id"]))
+        return [_clone(t) for t in rows]
+    if project_id is not None:
+        phases = _phase_index(data)
+        project_phase_ids = {p["id"] for p in data["phases"] if p["project_id"] == project_id}
+        rows = [t for t in data["tasks"] if t["phase_id"] in project_phase_ids]
+        rows.sort(key=lambda t: (t.get("order_index", 0), t["id"]))
+        enriched = []
+        for t in rows:
+            ph = phases.get(t["phase_id"], {})
+            item = _clone(t)
+            item["phase_name"] = ph.get("name")
+            item["phase_color"] = ph.get("color")
+            enriched.append(item)
+        return enriched
+    rows = sorted(data["tasks"], key=lambda t: (t.get("order_index", 0), t["id"]))
+    return [_clone(t) for t in rows]
 
 
 def create_task(phase_id, name, status="À faire", order_index=0):
-    with db_session() as conn:
-        return conn.execute(
-            text("""INSERT INTO tasks (phase_id, name, status, order_index)
-                    VALUES (:p, :n, :st, :o) RETURNING id"""),
-            {"p": phase_id, "n": name, "st": status, "o": order_index},
-        ).scalar()
+    new_id = db.next_id()
+    with db.transaction() as data:
+        data["tasks"].append({
+            "id": new_id, "phase_id": phase_id, "name": name,
+            "status": status, "order_index": order_index,
+        })
+    return new_id
 
 
 def set_task_status(task_id, status):
-    with db_session() as conn:
-        conn.execute(
-            text("UPDATE tasks SET status=:st WHERE id=:id"),
-            {"st": status, "id": task_id},
-        )
+    with db.transaction() as data:
+        for t in data["tasks"]:
+            if t["id"] == task_id:
+                t["status"] = status
+                break
 
 
 def rename_task(task_id, name):
-    with db_session() as conn:
-        conn.execute(text("UPDATE tasks SET name=:n WHERE id=:id"), {"n": name, "id": task_id})
+    with db.transaction() as data:
+        for t in data["tasks"]:
+            if t["id"] == task_id:
+                t["name"] = name
+                break
 
 
 def delete_task(task_id):
-    with db_session() as conn:
-        conn.execute(text("DELETE FROM tasks WHERE id=:id"), {"id": task_id})
+    with db.transaction() as data:
+        data["tasks"] = [t for t in data["tasks"] if t["id"] != task_id]
 
 
 # ===========================================================================
@@ -186,44 +209,38 @@ def delete_task(task_id):
 
 def get_phase_dependencies(project_id):
     """Toutes les dépendances entre phases d'un projet."""
-    with db_session() as conn:
-        res = conn.execute(
-            text("""SELECT pd.* FROM phase_dependencies pd
-                    JOIN phases p ON pd.phase_id = p.id
-                    WHERE p.project_id=:p"""),
-            {"p": project_id},
-        )
-        return rows_to_dicts(res)
+    data = db.get_data()
+    project_phase_ids = {p["id"] for p in data["phases"] if p["project_id"] == project_id}
+    return [_clone(d) for d in data["phase_dependencies"]
+            if d["phase_id"] in project_phase_ids]
 
 
 def get_phase_deps_for(phase_id):
     """Ids des phases dont dépend la phase donnée."""
-    with db_session() as conn:
-        res = conn.execute(
-            text("SELECT depends_on_phase_id FROM phase_dependencies WHERE phase_id=:id"),
-            {"id": phase_id},
-        )
-        return [r["depends_on_phase_id"] for r in res.mappings().all()]
+    data = db.get_data()
+    return [d["depends_on_phase_id"] for d in data["phase_dependencies"]
+            if d["phase_id"] == phase_id]
 
 
 def add_phase_dependency(phase_id, depends_on_phase_id):
     if phase_id == depends_on_phase_id:
         return
-    with db_session() as conn:
-        conn.execute(
-            text("""INSERT INTO phase_dependencies (phase_id, depends_on_phase_id)
-                    VALUES (:p, :d) ON CONFLICT DO NOTHING"""),
-            {"p": phase_id, "d": depends_on_phase_id},
-        )
+    with db.transaction() as data:
+        for d in data["phase_dependencies"]:
+            if d["phase_id"] == phase_id and d["depends_on_phase_id"] == depends_on_phase_id:
+                return  # déjà présent (équivalent ON CONFLICT DO NOTHING)
+        data["phase_dependencies"].append({
+            "id": db.next_id(), "phase_id": phase_id,
+            "depends_on_phase_id": depends_on_phase_id,
+        })
 
 
 def remove_phase_dependency(phase_id, depends_on_phase_id):
-    with db_session() as conn:
-        conn.execute(
-            text("""DELETE FROM phase_dependencies
-                    WHERE phase_id=:p AND depends_on_phase_id=:d"""),
-            {"p": phase_id, "d": depends_on_phase_id},
-        )
+    with db.transaction() as data:
+        data["phase_dependencies"] = [
+            d for d in data["phase_dependencies"]
+            if not (d["phase_id"] == phase_id and d["depends_on_phase_id"] == depends_on_phase_id)
+        ]
 
 
 # ===========================================================================
@@ -231,42 +248,44 @@ def remove_phase_dependency(phase_id, depends_on_phase_id):
 # ===========================================================================
 
 def get_deliverables(project_id):
-    with db_session() as conn:
-        res = conn.execute(
-            text("""SELECT dl.*, p.name AS phase_name
-                    FROM deliverables dl
-                    JOIN phases p ON dl.phase_id = p.id
-                    WHERE p.project_id=:p
-                    ORDER BY dl.due_date"""),
-            {"p": project_id},
-        )
-        return rows_to_dicts(res)
+    data = db.get_data()
+    phases = _phase_index(data)
+    project_phase_ids = {p["id"] for p in data["phases"] if p["project_id"] == project_id}
+    rows = [d for d in data["deliverables"] if d["phase_id"] in project_phase_ids]
+    rows.sort(key=lambda d: (d.get("due_date") or ""))
+    enriched = []
+    for d in rows:
+        item = _clone(d)
+        item["phase_name"] = phases.get(d["phase_id"], {}).get("name")
+        enriched.append(item)
+    return enriched
 
 
 def create_deliverable(phase_id, name, nature, due_date, recipient, status="À faire"):
-    with db_session() as conn:
-        return conn.execute(
-            text("""INSERT INTO deliverables (phase_id, name, nature, due_date, recipient, status)
-                    VALUES (:phase_id, :name, :nature, :due_date, :recipient, :status)
-                    RETURNING id"""),
-            {"phase_id": phase_id, "name": name, "nature": nature,
-             "due_date": due_date, "recipient": recipient, "status": status},
-        ).scalar()
+    new_id = db.next_id()
+    with db.transaction() as data:
+        data["deliverables"].append({
+            "id": new_id, "phase_id": phase_id, "name": name, "nature": nature,
+            "due_date": due_date, "recipient": recipient, "status": status,
+        })
+    return new_id
 
 
 def update_deliverable(deliverable_id, **fields):
     allowed = {"name", "nature", "due_date", "recipient", "status", "phase_id"}
-    clause, params = _build_set_clause(fields, allowed)
-    if not clause:
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
         return
-    params["id"] = deliverable_id
-    with db_session() as conn:
-        conn.execute(text(f"UPDATE deliverables SET {clause} WHERE id=:id"), params)
+    with db.transaction() as data:
+        for d in data["deliverables"]:
+            if d["id"] == deliverable_id:
+                d.update(updates)
+                break
 
 
 def delete_deliverable(deliverable_id):
-    with db_session() as conn:
-        conn.execute(text("DELETE FROM deliverables WHERE id=:id"), {"id": deliverable_id})
+    with db.transaction() as data:
+        data["deliverables"] = [d for d in data["deliverables"] if d["id"] != deliverable_id]
 
 
 # ===========================================================================
@@ -274,47 +293,50 @@ def delete_deliverable(deliverable_id):
 # ===========================================================================
 
 def get_meetings(project_id):
-    with db_session() as conn:
-        res = conn.execute(
-            text("""SELECT m.*, p.name AS phase_name
-                    FROM meetings m
-                    LEFT JOIN phases p ON m.phase_id = p.id
-                    WHERE m.project_id=:p
-                    ORDER BY m.date DESC, m.time DESC"""),
-            {"p": project_id},
-        )
-        return rows_to_dicts(res)
+    data = db.get_data()
+    phases = _phase_index(data)
+    rows = [m for m in data["meetings"] if m["project_id"] == project_id]
+    rows.sort(key=lambda m: (m.get("date") or "", m.get("time") or ""), reverse=True)
+    enriched = []
+    for m in rows:
+        item = _clone(m)
+        ph = phases.get(m.get("phase_id"))
+        item["phase_name"] = ph.get("name") if ph else None
+        enriched.append(item)
+    return enriched
 
 
 def get_meeting(meeting_id):
-    with db_session() as conn:
-        res = conn.execute(text("SELECT * FROM meetings WHERE id=:id"), {"id": meeting_id})
-        return row_to_dict(res)
+    data = db.get_data()
+    for m in data["meetings"]:
+        if m["id"] == meeting_id:
+            return _clone(m)
+    return None
 
 
 def create_meeting(project_id, phase_id, date, time, participants, subject, report=""):
-    with db_session() as conn:
-        return conn.execute(
-            text("""INSERT INTO meetings
-                    (project_id, phase_id, date, time, participants, subject, report)
-                    VALUES (:project_id, :phase_id, :date, :time, :participants, :subject, :report)
-                    RETURNING id"""),
-            {"project_id": project_id, "phase_id": phase_id, "date": date,
-             "time": time, "participants": participants, "subject": subject,
-             "report": report},
-        ).scalar()
+    new_id = db.next_id()
+    with db.transaction() as data:
+        data["meetings"].append({
+            "id": new_id, "project_id": project_id, "phase_id": phase_id,
+            "date": date, "time": time, "participants": participants,
+            "subject": subject, "report": report,
+        })
+    return new_id
 
 
 def update_meeting(meeting_id, **fields):
     allowed = {"phase_id", "date", "time", "participants", "subject", "report"}
-    clause, params = _build_set_clause(fields, allowed)
-    if not clause:
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
         return
-    params["id"] = meeting_id
-    with db_session() as conn:
-        conn.execute(text(f"UPDATE meetings SET {clause} WHERE id=:id"), params)
+    with db.transaction() as data:
+        for m in data["meetings"]:
+            if m["id"] == meeting_id:
+                m.update(updates)
+                break
 
 
 def delete_meeting(meeting_id):
-    with db_session() as conn:
-        conn.execute(text("DELETE FROM meetings WHERE id=:id"), {"id": meeting_id})
+    with db.transaction() as data:
+        data["meetings"] = [m for m in data["meetings"] if m["id"] != meeting_id]

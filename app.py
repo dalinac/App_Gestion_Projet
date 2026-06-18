@@ -29,9 +29,9 @@ theme.inject_css()
 
 def ensure_db():
     """
-    Initialise la base de données une seule fois par session. En cas d'échec de
-    connexion à PostgreSQL, affiche un message clair et actionnable plutôt que
-    de laisser remonter une erreur technique redacted.
+    Initialise le stockage une seule fois par session. En cas d'échec d'accès au
+    gist GitHub (token invalide, gist introuvable, réseau), affiche un message
+    clair et actionnable plutôt que de laisser remonter une erreur technique.
     """
     if st.session_state.get("_db_ready"):
         return
@@ -40,14 +40,13 @@ def ensure_db():
         st.session_state["_db_ready"] = True
     except Exception as exc:
         st.error(
-            "Impossible de se connecter à la base de données PostgreSQL.\n\n"
-            "Causes les plus fréquentes (Streamlit Cloud + Supabase) :\n"
-            "- utiliser l'URL **directe** (`db.xxxx.supabase.co`) au lieu du "
-            "**Session pooler** (`...pooler.supabase.com`) : Streamlit Cloud exige l'IPv4 ;\n"
-            "- un **mot de passe contenant des caractères spéciaux** : préférez le "
-            "format de secret par champs séparés `[postgres]` (voir le README) ;\n"
-            "- le marqueur `[YOUR-PASSWORD]` non remplacé, un mauvais port "
-            "(Session pooler = 5432) ou un mot de passe erroné."
+            "Impossible d'accéder au stockage GitHub Gist.\n\n"
+            "Causes les plus fréquentes (Streamlit Cloud + GitHub Gist) :\n"
+            "- un **token GitHub invalide ou expiré**, ou sans la portée `gist` ;\n"
+            "- un **`gist_id` erroné** (l'identifiant est la partie finale de "
+            "l'URL du gist) ;\n"
+            "- des secrets mal renseignés : il faut un bloc `[github]` avec "
+            "`token` et `gist_id` (voir le README, section « Déploiement persistant »)."
         )
         with st.expander("Détail technique de l'erreur"):
             st.code(f"{type(exc).__name__}: {exc}")
@@ -55,8 +54,8 @@ def ensure_db():
 
 
 def storage_is_persistent():
-    """Vrai si le stockage actif est une base persistante (PostgreSQL)."""
-    return db.backend_label().startswith("PostgreSQL")
+    """Vrai si le stockage actif est persistant (GitHub Gist)."""
+    return db.is_persistent()
 
 
 def render_storage_status():
@@ -65,13 +64,13 @@ def render_storage_status():
     succès si persistant, avertissement appuyé sinon.
     """
     if storage_is_persistent():
-        st.sidebar.success("Stockage : PostgreSQL (persistant)")
+        st.sidebar.success("Stockage : GitHub Gist (persistant)")
     else:
         st.sidebar.warning(
-            "Stockage : SQLite local (NON persistant).\n\n"
+            "Stockage : fichier local (NON persistant).\n\n"
             "En ligne (Streamlit Cloud), les données sont effacées à chaque "
-            "redémarrage du serveur. Configurez le secret DATABASE_URL "
-            "(Supabase) pour les conserver durablement."
+            "redémarrage du serveur. Configurez les secrets `[github]` "
+            "(token + gist_id) pour les conserver durablement."
         )
 
 
@@ -88,11 +87,11 @@ def login_screen():
     # Avertissement bien visible si le stockage n'est pas persistant
     if not storage_is_persistent():
         st.warning(
-            "**Stockage non persistant.** Vos données sont actuellement dans une "
-            "base SQLite locale qui, sur Streamlit Cloud, est effacée à chaque "
+            "**Stockage non persistant.** Vos données sont actuellement dans un "
+            "fichier JSON local qui, sur Streamlit Cloud, est effacé à chaque "
             "redémarrage du serveur. Pour conserver durablement vos projets, "
-            "configurez une base Supabase via le secret `DATABASE_URL` "
-            "(voir le README, section « Déploiement persistant »)."
+            "configurez un gist GitHub via les secrets `[github]` (token + gist_id, "
+            "voir le README, section « Déploiement persistant »)."
         )
 
     with st.form("login", clear_on_submit=False):
