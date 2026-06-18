@@ -34,6 +34,27 @@ def ensure_db():
         st.session_state["_db_ready"] = True
 
 
+def storage_is_persistent():
+    """Vrai si le stockage actif est une base persistante (PostgreSQL)."""
+    return db.backend_label().startswith("PostgreSQL")
+
+
+def render_storage_status():
+    """
+    Affiche l'état du stockage dans la barre latérale (toujours visible) :
+    succès si persistant, avertissement appuyé sinon.
+    """
+    if storage_is_persistent():
+        st.sidebar.success("Stockage : PostgreSQL (persistant)")
+    else:
+        st.sidebar.warning(
+            "Stockage : SQLite local (NON persistant).\n\n"
+            "En ligne (Streamlit Cloud), les données sont effacées à chaque "
+            "redémarrage du serveur. Configurez le secret DATABASE_URL "
+            "(Supabase) pour les conserver durablement."
+        )
+
+
 def login_screen():
     """
     Écran d'accueil : saisie du Username. Tant qu'aucun nom n'est saisi, le
@@ -43,6 +64,17 @@ def login_screen():
         "Bienvenue",
         "Saisissez votre nom d'utilisateur pour accéder à vos projets.",
     )
+
+    # Avertissement bien visible si le stockage n'est pas persistant
+    if not storage_is_persistent():
+        st.warning(
+            "**Stockage non persistant.** Vos données sont actuellement dans une "
+            "base SQLite locale qui, sur Streamlit Cloud, est effacée à chaque "
+            "redémarrage du serveur. Pour conserver durablement vos projets, "
+            "configurez une base Supabase via le secret `DATABASE_URL` "
+            "(voir le README, section « Déploiement persistant »)."
+        )
+
     with st.form("login", clear_on_submit=False):
         username = st.text_input("Nom d'utilisateur")
         submitted = st.form_submit_button("Se connecter")
@@ -55,7 +87,7 @@ def login_screen():
                 st.error("Veuillez saisir un nom d'utilisateur.")
     st.caption(
         "Chaque utilisateur ne voit et ne modifie que ses propres projets. "
-        "Saisissez le même nom pour retrouver vos projets ultérieurement."
+        "Saisissez le même nom (mêmes majuscules) pour retrouver vos projets."
     )
 
 
@@ -134,6 +166,9 @@ def select_project(username):
 def main():
     ensure_db()
 
+    # État du stockage toujours visible (avertit si non persistant)
+    render_storage_status()
+
     # Étape 1 : identification obligatoire
     username = st.session_state.get("username")
     if not username:
@@ -174,9 +209,6 @@ def main():
         meetings.render(project_id)
     elif page == "Export":
         export.render(project_id)
-
-    st.sidebar.divider()
-    st.sidebar.caption(f"Stockage : {db.backend_label()}")
 
 
 if __name__ == "__main__":
