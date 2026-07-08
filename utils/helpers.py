@@ -118,32 +118,49 @@ def phase_is_active_this_week(phase, reference=None):
 
 def project_bounds(project, phases):
     """
-    Retourne (date_debut, date_fin) du projet : on privilégie les dates du
-    projet, avec repli sur l'amplitude des phases.
+    Retourne (date_debut, date_fin) du projet en prenant l'amplitude la PLUS
+    LARGE entre les dates saisies sur le projet et l'étendue réelle des phases.
+
+    Motivation : le formulaire de création met par défaut début = fin =
+    aujourd'hui. Si l'utilisateur ne corrige que partiellement ces dates, se
+    fier aux seules dates du projet fausserait le calcul du temps écoulé (100 %
+    dès aujourd'hui) alors que les phases décrivent un planning bien plus long.
+    On combine donc les deux sources.
     """
-    start = parse_date(project.get("start_date")) if project else None
-    end = parse_date(project.get("end_date")) if project else None
     starts = [parse_date(p.get("start_date")) for p in phases]
     ends = [parse_date(p.get("end_date")) for p in phases]
     starts = [d for d in starts if d]
     ends = [d for d in ends if d]
-    if not start and starts:
-        start = min(starts)
-    if not end and ends:
-        end = max(ends)
+
+    if project:
+        ps = parse_date(project.get("start_date"))
+        pe = parse_date(project.get("end_date"))
+        if ps:
+            starts.append(ps)
+        if pe:
+            ends.append(pe)
+
+    start = min(starts) if starts else None
+    end = max(ends) if ends else None
     return start, end
 
 
 def project_health(project, phases, reference=None):
     """
-    Indicateur de santé du projet : compare l'avancement (part de phases
-    terminées) au temps écoulé entre la date de début et la deadline.
+    Indicateur de santé du projet : compare l'avancement réel (avancement global
+    pondéré par la durée des phases) au temps écoulé entre le début et la
+    deadline.
+
+    On utilise l'avancement global (le même indicateur que le KPI « Avancement
+    global ») plutôt qu'un simple décompte des phases « Terminé » : une phase à
+    60 % compte pour 60 %, ce qui évite de paraître injustement en retard tant
+    qu'aucune phase n'est totalement bouclée.
 
     Retourne un dict :
         {
-          "done_pct": float,      # % de phases terminées
+          "progress_pct": float,  # % d'avancement réel (pondéré)
           "time_pct": float,      # % de temps écoulé
-          "delta": float,         # done_pct - time_pct (positif = en avance)
+          "delta": float,         # progress_pct - time_pct (positif = en avance)
           "status": str,          # 'En avance' / 'Dans les temps' / 'En retard'
           "color": str,           # couleur associée au statut
           "available": bool,      # False si dates manquantes
@@ -152,20 +169,19 @@ def project_health(project, phases, reference=None):
     ref = reference or date.today()
     start, end = project_bounds(project, phases)
 
-    result = {"done_pct": 0.0, "time_pct": 0.0, "delta": 0.0,
+    result = {"progress_pct": 0.0, "time_pct": 0.0, "delta": 0.0,
               "status": "Indéterminé", "color": "#C9C0B2", "available": False}
 
     if not phases or not start or not end or end <= start:
         return result
 
-    done = sum(1 for p in phases if p.get("status") == "Terminé")
-    done_pct = done / len(phases) * 100
+    progress_pct = float(global_progress(phases))
 
     total_days = (end - start).days
     elapsed = (ref - start).days
     time_pct = max(0.0, min(100.0, elapsed / total_days * 100)) if total_days else 0.0
 
-    delta = done_pct - time_pct
+    delta = progress_pct - time_pct
     # Tolérance de +/- 7 points pour considérer le projet "dans les temps"
     if delta >= 7:
         status, color = "En avance", "#7FA86B"      # vert sauge
@@ -175,7 +191,7 @@ def project_health(project, phases, reference=None):
         status, color = "Dans les temps", "#C9A66B"  # ocre
 
     result.update({
-        "done_pct": round(done_pct, 1),
+        "progress_pct": round(progress_pct, 1),
         "time_pct": round(time_pct, 1),
         "delta": round(delta, 1),
         "status": status,

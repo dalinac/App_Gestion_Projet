@@ -160,14 +160,14 @@ def _render_health(health):
     with col_gauge:
         fig = go.Figure(go.Indicator(
             mode="gauge+number+delta",
-            value=health["done_pct"],
+            value=health["progress_pct"],
             number={"suffix": "%"},
             delta={
                 "reference": health["time_pct"],
                 "increasing": {"color": "#7FA86B"},
                 "decreasing": {"color": "#B5654A"},
             },
-            title={"text": "Phases terminées vs temps écoulé"},
+            title={"text": "Avancement réel vs temps écoulé"},
             gauge={
                 "axis": {"range": [0, 100]},
                 "bar": {"color": health["color"]},
@@ -207,7 +207,7 @@ def _render_health(health):
             unsafe_allow_html=True,
         )
         st.caption(
-            f"Phases terminées : {health['done_pct']}%  ·  "
+            f"Avancement réel : {health['progress_pct']}%  ·  "
             f"Temps écoulé : {health['time_pct']}%"
         )
         st.caption(

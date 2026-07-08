@@ -161,16 +161,25 @@ section[data-testid="stSidebar"] > div {
 /* ---- Séparateurs ---- */
 hr { border-color: #E7DCC9 !important; }
 
-/* ---- Radio de navigation : pastilles discrètes ---- */
-section[data-testid="stSidebar"] .stRadio label {
+/* ---- Radio de navigation : pastilles discrètes ----
+   On cible uniquement les OPTIONS (dans le radiogroup) : le libellé du groupe
+   « Navigation » reste un simple titre de section, non encadré, homogène avec
+   le libellé « Projet actif ». */
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label {
     background: #FFFFFF99;
     border-radius: 10px;
     padding: 6px 10px;
     margin-bottom: 4px;
     transition: background .15s ease;
 }
-section[data-testid="stSidebar"] .stRadio label:hover {
+section[data-testid="stSidebar"] .stRadio [role="radiogroup"] label:hover {
     background: #EFE3CE;
+}
+/* Libellé du groupe (titre de section « Navigation ») : même allure que les
+   autres libellés de widgets de la barre latérale. */
+section[data-testid="stSidebar"] .stRadio > label {
+    font-weight: 600;
+    color: #6B5844;
 }
 </style>
 """

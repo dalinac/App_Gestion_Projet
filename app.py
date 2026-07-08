@@ -174,10 +174,44 @@ def select_project(username):
     st.session_state["current_project"] = selected
 
     with st.sidebar.expander("Gérer ce projet"):
-        if st.button("Supprimer le projet", type="secondary"):
-            models.delete_project(selected)
-            st.session_state.pop("current_project", None)
-            st.rerun()
+        # --- Renommer le projet ---
+        with st.form("rename_project", clear_on_submit=False):
+            new_name = st.text_input("Renommer ce projet", value=labels[selected])
+            if st.form_submit_button("Renommer"):
+                if new_name.strip():
+                    current = models.get_project(selected)
+                    models.update_project(
+                        selected, new_name.strip(),
+                        current.get("description"),
+                        current.get("start_date"), current.get("end_date"),
+                    )
+                    st.rerun()
+                else:
+                    st.error("Le nom ne peut pas être vide.")
+
+        st.divider()
+
+        # --- Supprimer le projet (avec confirmation, action définitive) ---
+        del_key = f"_confirm_delete_{selected}"
+        if not st.session_state.get(del_key):
+            if st.button("Supprimer le projet", type="secondary"):
+                st.session_state[del_key] = True
+                st.rerun()
+        else:
+            st.warning(
+                f"Supprimer définitivement le projet « {labels[selected]} » ? "
+                "Cette action est irréversible : toutes ses phases, tâches, "
+                "livrables et réunions seront perdus."
+            )
+            c1, c2 = st.columns(2)
+            if c1.button("Oui, supprimer"):
+                models.delete_project(selected)
+                st.session_state.pop(del_key, None)
+                st.session_state.pop("current_project", None)
+                st.rerun()
+            if c2.button("Annuler"):
+                st.session_state.pop(del_key, None)
+                st.rerun()
 
     return selected
 

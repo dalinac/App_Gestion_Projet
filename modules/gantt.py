@@ -7,6 +7,9 @@ d'autres phases. Les phases du chemin critique (tout retard décale la fin du
 projet) sont bordées en rouge.
 """
 
+from datetime import date
+
+import pandas as pd
 import plotly.express as px
 
 from utils.helpers import parse_date
@@ -64,9 +67,19 @@ def build_phase_gantt_figure(phases, phase_deps, highlight_critical=True):
         y="Phase",
         color="Phase",
         color_discrete_map=color_map,
+        text="Phase",
         hover_data=["Version", "Statut", "Avancement", "Critique"],
     )
     fig.update_yaxes(autorange="reversed")
+
+    # Nom de la phase écrit sur la barre (masqué automatiquement si la barre est
+    # trop petite pour l'accueillir — voir uniformtext plus bas).
+    fig.update_traces(
+        textposition="inside",
+        insidetextanchor="middle",
+        textfont=dict(color="#3E3325", size=12, family="Mulish, sans-serif"),
+        cliponaxis=False,
+    )
 
     # Bordure rouge brique pour les phases du chemin critique
     if highlight_critical and critical_ids:
@@ -90,16 +103,41 @@ def build_phase_gantt_figure(phases, phase_deps, highlight_critical=True):
         height=max(360, 46 * len(rows) + 150),
         showlegend=False,
         margin=dict(l=10, r=10, t=60, b=10),
+        hovermode="closest",
+        # Uniformise la taille du texte et masque celui qui ne tient pas dans sa
+        # barre : les noms n'apparaissent donc que « si la place le permet ».
+        uniformtext_minsize=9,
+        uniformtext_mode="hide",
     )
     theme.style_fig(fig)
 
-    # Grille : contour (mirror) + lignes intérieures, en tons doux
+    # Grille + curseur vertical qui suit la souris (spike) pour lire les dates
+    # en se positionnant n'importe où sur la grille.
     fig.update_xaxes(
         showgrid=True, gridcolor="#E0D4BF", gridwidth=1,
         showline=True, linecolor="#C7B393", linewidth=1, mirror=True,
+        showspikes=True, spikemode="across", spikesnap="cursor",
+        spikecolor="#9E7D52", spikethickness=1.2, spikedash="solid",
     )
     fig.update_yaxes(
         showgrid=True, gridcolor="#E0D4BF", gridwidth=1,
         showline=True, linecolor="#C7B393", linewidth=1, mirror=True,
     )
+
+    # Repère FIXE « Aujourd'hui » : couleur voyante mais douce (terracotta),
+    # indique la date du jour (et donc où l'on est censé être dans le planning).
+    today = date.today()
+    starts = [r["Début"] for r in rows]
+    ends = [r["Fin"] for r in rows]
+    if starts and ends and min(starts) <= today <= max(ends):
+        fig.add_vline(
+            x=pd.Timestamp(today),
+            line_width=2,
+            line_dash="dash",
+            line_color="rgba(200, 90, 70, 0.65)",
+            annotation_text="Aujourd'hui",
+            annotation_position="top",
+            annotation_font_color="#B5654A",
+            annotation_font_size=12,
+        )
     return fig, cp
