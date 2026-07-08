@@ -9,12 +9,14 @@ Module de gestion des phases (coeur du système) et de leurs tâches.
 """
 
 import streamlit as st
+import pandas as pd
 from datetime import date
 
 from database import models
 from modules import theme
 from utils.helpers import (
     STATUSES, PHASE_PALETTE, parse_date, phase_progress_from_tasks,
+    phase_segments,
 )
 
 
@@ -81,20 +83,11 @@ def _render_phases(project_id):
 
 
 def _render_phase_editor(p):
-    """Formulaire d'édition d'une phase."""
+    """Formulaire d'édition d'une phase (métadonnées) + éditeur de périodes."""
     with st.form(f"edit_phase_{p['id']}"):
         c1, c2 = st.columns(2)
         name = c1.text_input("Nom *", value=p["name"])
         version = c2.text_input("Version", value=p.get("version", "V1"))
-        c3, c4 = st.columns(2)
-        start = c3.date_input(
-            "Début *", value=parse_date(p.get("start_date")) or date.today(),
-            key=f"ps_{p['id']}",
-        )
-        end = c4.date_input(
-            "Fin *", value=parse_date(p.get("end_date")) or date.today(),
-            key=f"pe_{p['id']}",
-        )
         c5, c6 = st.columns(2)
         status = c5.selectbox(
             "Statut", STATUSES,
@@ -124,17 +117,13 @@ def _render_phase_editor(p):
         delete = col_del.form_submit_button("Supprimer la phase")
 
         if save:
-            if end < start:
-                st.error("La date de fin doit être postérieure ou égale à la date de début.")
-            else:
-                models.update_phase(
-                    p["id"], name=name, description=description,
-                    start_date=start.isoformat(), end_date=end.isoformat(),
-                    status=status, progress=progress, version=version,
-                    color=color, comments=comments,
-                )
-                st.success("Phase mise à jour.")
-                st.rerun()
+            models.update_phase(
+                p["id"], name=name, description=description,
+                status=status, progress=progress, version=version,
+                color=color, comments=comments,
+            )
+            st.success("Phase mise à jour.")
+            st.rerun()
         if use_auto and auto is not None:
             models.update_phase_progress(p["id"], auto)
             st.success(f"Avancement défini à {auto}%.")
@@ -143,6 +132,88 @@ def _render_phase_editor(p):
             models.delete_phase(p["id"])
             st.warning("Phase supprimée.")
             st.rerun()
+
+    _render_phase_periods(p)
+
+
+def _render_phase_periods(p):
+    """
+    Éditeur des périodes d'une phase (hors formulaire principal).
+
+    Une phase peut se dérouler en plusieurs temps (alternance, creux d'un mois,
+    etc.). Le tableau accepte autant de lignes « du… au… » que nécessaire ; les
+    dates de la phase (enveloppe) sont recalculées à partir de ces périodes.
+    """
+    st.markdown("**Périodes de la phase**")
+    st.caption(
+        "Ajoutez plusieurs lignes pour découper la phase en plusieurs temps "
+        "(les creux entre périodes ne comptent pas dans la durée travaillée). "
+        "Une seule ligne = phase continue."
+    )
+
+    periods = phase_segments(p)
+    rows = [{"Début": s, "Fin": e} for s, e in periods] or [{"Début": None, "Fin": None}]
+    df = pd.DataFrame(rows, columns=["Début", "Fin"])
+
+    edited = st.data_editor(
+        df, num_rows="dynamic", width='stretch', key=f"periods_{p['id']}",
+        column_config={
+            "Début": st.column_config.DateColumn("Début", format="DD/MM/YYYY"),
+            "Fin": st.column_config.DateColumn("Fin", format="DD/MM/YYYY"),
+        },
+    )
+
+    if st.button("Enregistrer les périodes", key=f"savep_{p['id']}"):
+        segs, err = _read_periods(edited)
+        if err:
+            st.error(err)
+        else:
+            start = min(s for s, _ in segs).isoformat()
+            end = max(e for _, e in segs).isoformat()
+            # Une seule période => phase continue (pas de segments à stocker).
+            segments = [] if len(segs) == 1 else [
+                {"start_date": s.isoformat(), "end_date": e.isoformat()} for s, e in segs
+            ]
+            models.update_phase(p["id"], start_date=start, end_date=end, segments=segments)
+            st.success("Périodes enregistrées.")
+            st.rerun()
+
+
+def _coerce_date(value):
+    """Convertit une cellule du tableau (Timestamp/date/texte/NaT) en date ou None."""
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, date):
+        return value
+    if hasattr(value, "date"):
+        try:
+            return value.date()
+        except (TypeError, ValueError):
+            pass
+    return parse_date(str(value))
+
+
+def _read_periods(edited):
+    """Valide et trie les périodes saisies. Retourne (liste[(début,fin)], erreur)."""
+    result = []
+    for _, r in edited.iterrows():
+        s = _coerce_date(r.get("Début"))
+        e = _coerce_date(r.get("Fin"))
+        if s is None and e is None:
+            continue
+        if s is None or e is None:
+            return None, "Chaque période doit avoir une date de début ET une date de fin."
+        if e < s:
+            return None, "La date de fin doit être postérieure ou égale à la date de début."
+        result.append((s, e))
+    if not result:
+        return None, "Renseignez au moins une période (début et fin)."
+    return sorted(result), None
 
 
 def _render_task_todo(p):

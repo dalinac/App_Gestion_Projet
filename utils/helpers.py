@@ -33,6 +33,39 @@ def parse_date(value):
         return None
 
 
+def phase_segments(phase):
+    """
+    Périodes d'une phase, sous forme de liste de couples (début, fin) de dates.
+
+    Une phase peut se dérouler en plusieurs temps (alternance, creux d'un mois,
+    etc.) : ces périodes sont stockées dans le champ ``segments`` (liste de
+    dicts {"start_date", "end_date"}). En l'absence de segments, on retombe sur
+    la période unique décrite par ``start_date`` / ``end_date``.
+
+    Les couples renvoyés sont triés et ne contiennent que des dates valides.
+    """
+    result = []
+    for seg in (phase.get("segments") or []):
+        a = parse_date(seg.get("start_date"))
+        b = parse_date(seg.get("end_date"))
+        if a and b and b >= a:
+            result.append((a, b))
+    if not result:
+        a = parse_date(phase.get("start_date"))
+        b = parse_date(phase.get("end_date"))
+        if a and b and b >= a:
+            result.append((a, b))
+    return sorted(result)
+
+
+def phase_active_days(phase):
+    """
+    Nombre de jours réellement travaillés d'une phase = somme de la durée de
+    ses périodes (les creux entre périodes ne sont donc pas comptés).
+    """
+    return sum(max((b - a).days, 1) for a, b in phase_segments(phase))
+
+
 def format_date_fr(value):
     """Formate une date ISO au format français JJ/MM/AAAA."""
     d = parse_date(value)
@@ -60,9 +93,7 @@ def global_progress(phases):
     total_weight = 0
     weighted = 0
     for p in phases:
-        start = parse_date(p.get("start_date"))
-        end = parse_date(p.get("end_date"))
-        weight = max((end - start).days, 1) if (start and end) else 1
+        weight = phase_active_days(p) or 1
         weighted += (p.get("progress") or 0) * weight
         total_weight += weight
     return round(weighted / total_weight) if total_weight else 0
@@ -75,10 +106,7 @@ def phase_duration_share(phases):
     """
     durations = []
     for p in phases:
-        start = parse_date(p.get("start_date"))
-        end = parse_date(p.get("end_date"))
-        days = max((end - start).days, 1) if (start and end) else 0
-        durations.append((p["name"], days))
+        durations.append((p["name"], phase_active_days(p)))
     total = sum(d for _, d in durations)
     result = []
     for name, days in durations:

@@ -21,7 +21,7 @@ from utils.helpers import (
     format_date_fr,
 )
 from modules.gantt import build_phase_gantt_figure
-from modules import theme
+from modules import theme, export
 from datetime import date
 
 
@@ -70,6 +70,9 @@ def render(project_id):
             )
     else:
         st.info("Ajoutez des phases avec des dates de début et de fin pour afficher le Gantt.")
+
+    with st.expander("Exporter cette vue (PNG / PDF / HTML)"):
+        export.render_graphics_export(project_id)
 
     st.divider()
 

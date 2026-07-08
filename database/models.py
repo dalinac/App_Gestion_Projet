@@ -98,7 +98,7 @@ def get_phase(phase_id):
 
 def create_phase(project_id, name, description, start_date, end_date,
                  status="À faire", progress=0, version="V1", color="#C9A66B",
-                 order_index=0, comments=""):
+                 order_index=0, comments="", segments=None):
     new_id = db.next_id()
     with db.transaction() as data:
         data["phases"].append({
@@ -106,13 +106,15 @@ def create_phase(project_id, name, description, start_date, end_date,
             "description": description, "start_date": start_date, "end_date": end_date,
             "status": status, "progress": progress, "version": version, "color": color,
             "order_index": order_index, "comments": comments,
+            "segments": segments or [],
         })
     return new_id
 
 
 def update_phase(phase_id, **fields):
     allowed = {"name", "description", "start_date", "end_date", "status",
-               "progress", "version", "color", "order_index", "comments"}
+               "progress", "version", "color", "order_index", "comments",
+               "segments"}
     updates = {k: v for k, v in fields.items() if k in allowed}
     if not updates:
         return

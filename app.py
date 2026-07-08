@@ -191,6 +191,46 @@ def select_project(username):
 
         st.divider()
 
+        # --- Exporter les données du projet (archive ZIP de CSV) ---
+        st.download_button(
+            "Exporter le projet (ZIP)",
+            data=export.build_project_zip(selected),
+            file_name=f"projet_{export._safe(labels[selected])}.zip",
+            mime="application/zip",
+            width='stretch',
+        )
+
+        # --- Importer des données dans ce projet (miroir de l'export) ---
+        uploads = st.file_uploader(
+            "Importer des données (CSV ou ZIP)",
+            type=["zip", "csv"], accept_multiple_files=True,
+            key=f"import_{selected}",
+            help="Fichiers attendus : phases.csv, taches.csv, livrables.csv, "
+                 "reunions.csv, dependances.csv (ou l'archive ZIP exportée). "
+                 "Les lignes sont reliées aux phases par la colonne « phase_name ».",
+        )
+        if uploads and st.button("Importer dans ce projet", width='stretch'):
+            datasets = export.parse_uploads(uploads)
+            if not datasets:
+                st.error(
+                    "Aucun fichier reconnu. Noms attendus : phases.csv, taches.csv, "
+                    "livrables.csv, reunions.csv, dependances.csv."
+                )
+            else:
+                s = export.import_data(selected, datasets)
+                st.success(
+                    f"Import terminé : {s['phases']} phase(s), {s['taches']} tâche(s), "
+                    f"{s['livrables']} livrable(s), {s['reunions']} réunion(s), "
+                    f"{s['dependances']} dépendance(s)."
+                )
+                if s["ignores"]:
+                    with st.expander(f"{len(s['ignores'])} ligne(s) ignorée(s)"):
+                        for msg in s["ignores"]:
+                            st.caption(msg)
+                st.rerun()
+
+        st.divider()
+
         # --- Supprimer le projet (avec confirmation, action définitive) ---
         del_key = f"_confirm_delete_{selected}"
         if not st.session_state.get(del_key):
@@ -247,7 +287,7 @@ def main():
     page = st.sidebar.radio(
         "Navigation",
         ["Tableau de bord", "Action Rapide", "Phases & Tâches",
-         "Livrables", "Réunions", "Export"],
+         "Livrables", "Réunions"],
     )
 
     if page == "Tableau de bord":
@@ -260,8 +300,6 @@ def main():
         deliverables.render(project_id)
     elif page == "Réunions":
         meetings.render(project_id)
-    elif page == "Export":
-        export.render(project_id)
 
 
 if __name__ == "__main__":
